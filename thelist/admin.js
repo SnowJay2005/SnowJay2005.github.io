@@ -22,17 +22,18 @@ function displayItemList() {
 
     try {
       snapshot.forEach(function (childSnapshot) {
-        var itemName = childSnapshot.key; // Retrieve the item name
-        var itemVersions = childSnapshot.val(); // Retrieve all versions of the item
+        var itemName = childSnapshot.key; // Retrieve the name of the item
 
-        for (var versionKey in itemVersions) {
-          var version = itemVersions[versionKey]; // Retrieve each version
+        childSnapshot.forEach(function (versionSnapshot) {
+          var versionKey = versionSnapshot.key; // Retrieve the key of the version
+          var version = versionSnapshot.val(); // Retrieve the version object
 
           var itemCard = document.createElement('div');
           itemCard.classList.add('item-card');
 
-          var itemNameVersion = document.createElement('p');
-          itemNameVersion.textContent = itemName + ' - ' + versionKey;
+          var itemNameElement = document.createElement('a');
+          itemNameElement.textContent = itemName + ' (' + versionKey + ')';
+          itemNameElement.href = 'item.html#' + encodeURIComponent(itemName);
 
           var itemCount = document.createElement('p');
           itemCount.textContent = 'Count: ' + version.count;
@@ -49,12 +50,12 @@ function displayItemList() {
             deleteItem(itemName, versionKey); // Pass the item name and version key to the delete function
           });
 
-          itemCard.appendChild(itemNameVersion);
+          itemCard.appendChild(itemNameElement);
           itemCard.appendChild(itemCount);
           itemCard.appendChild(editButton);
           itemCard.appendChild(deleteButton);
           itemListElement.appendChild(itemCard);
-        }
+        });
       });
 
       totalElement.textContent = snapshot.numChildren();
