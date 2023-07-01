@@ -87,8 +87,9 @@ newItemForm.addEventListener('submit', function(event) {
   };
 
   // Save the new item to Firebase
-  var newItemRef = db.ref('items').push();
-  newItemRef.set(newItem)
+  var newItemRef = db.ref('items').set(itemName);
+  var newerItemRed = newItemRef.set(itemVersion);
+  newerItemRef.set(newItem)
     .then(function() {
       console.log('New item added successfully');
       newItemForm.reset(); // Reset the form fields
