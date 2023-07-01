@@ -33,7 +33,7 @@ function onItemClick(event) {
     var item = findItemByName(target.textContent.trim());
     if (item) {
       // Construct the URL for the individual item page dynamically
-      var itemPageURL = 'item.html' + '#' + encodeURIComponent(item.name);
+      var itemPageURL = 'item.html#' + encodeURIComponent(item.name);
       window.location.href = itemPageURL;
     }
   }
@@ -47,22 +47,6 @@ function findItemByName(name) {
     }
   }
   return null;
-}
-
-// Update the item page with the content of the selected item
-function updateItemPage() {
-  var itemName = decodeURIComponent(window.location.hash.substring(1));
-  var item = findItemByName(itemName);
-
-  if (item) {
-    var itemNameElement = document.getElementById('item-name');
-    var itemImageElement = document.getElementById('item-image');
-    var itemDescriptionElement = document.getElementById('item-description');
-
-    itemNameElement.textContent = item.name;
-    itemImageElement.src = item.image;
-    itemDescriptionElement.textContent = item.description;
-  }
 }
 
 // Display the list of items
