@@ -62,5 +62,19 @@ function updateItemPage(item) {
   itemDescriptionElement.textContent = item.description;
 }
 
+// Load the item content based on the URL hash
+function loadItemContent() {
+  var itemHash = window.location.hash.substr(1);
+  var itemName = decodeURIComponent(itemHash);
+
+  var item = findItemByName(itemName);
+  if (item) {
+    updateItemPage(item);
+  } else {
+    // Handle invalid or non-existing item names
+    console.log('Item not found: ' + itemName);
+  }
+}
+
 // Call the displayItemList function to populate the item list on the index.html page
 displayItemList();

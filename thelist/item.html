@@ -21,16 +21,7 @@
   <script>
     // Load the item content based on the URL hash
     window.addEventListener('DOMContentLoaded', function() {
-      var itemHash = window.location.hash.substr(1);
-      var itemName = decodeURIComponent(itemHash);
-
-      var item = findItemByName(itemName);
-      if (item) {
-        updateItemPage(item);
-      } else {
-        // Handle invalid or non-existing item names
-        console.log('Item not found: ' + itemName);
-      }
+      loadItemContent();
     });
   </script>
 </body>
