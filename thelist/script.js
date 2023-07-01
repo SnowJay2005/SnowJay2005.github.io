@@ -33,15 +33,15 @@ function displayItemList(items) {
     var editButton = document.createElement('button');
     editButton.textContent = 'Edit';
     editButton.addEventListener('click', function() {
-      // Handle edit functionality here
-      console.log('Edit item:', item);
+      // Call the editItem function with the item object
+      editItem(item);
     });
 
     var deleteButton = document.createElement('button');
     deleteButton.textContent = 'Delete';
     deleteButton.addEventListener('click', function() {
-      // Handle delete functionality here
-      console.log('Delete item:', item);
+      // Call the deleteItem function with the item object
+      deleteItem(item);
     });
 
     itemCard.appendChild(itemName);
@@ -133,3 +133,17 @@ db.ref('items').once('value', function(snapshot) {
 
   displayItemList(items);
 });
+
+// Function to handle editing an item
+function editItem(item) {
+  // You can implement the edit functionality here
+  // For example, you can show a form to edit the item's details
+  console.log('Edit item:', item);
+}
+
+// Function to handle deleting an item
+function deleteItem(item) {
+  // You can implement the delete functionality here
+  // For example, you can prompt the user for confirmation and then delete the item from the database
+  console.log('Delete item:', item);
+}
