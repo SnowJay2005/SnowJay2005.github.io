@@ -62,4 +62,5 @@ function updateItemPage(item) {
   itemDescriptionElement.textContent = item.description;
 }
 
-// Call the displayItemList function to populate the item list on the index.html
+// Call the displayItemList function to populate the item list on the index.html page
+displayItemList();
