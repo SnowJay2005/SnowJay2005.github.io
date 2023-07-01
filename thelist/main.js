@@ -27,28 +27,10 @@ function displayItemList() {
 
         var totalItemCount = 0;
 
-        // Iterate over each version of the item
+        // Iterate over each version of the item and calculate the total count
         for (var versionKey in itemVersions) {
           if (itemVersions.hasOwnProperty(versionKey)) {
             var item = itemVersions[versionKey];
-
-            var itemCard = document.createElement('div');
-            itemCard.classList.add('item-card');
-
-            var itemNameElement = document.createElement('p');
-            itemNameElement.textContent = itemName;
-
-            var itemVersionElement = document.createElement('p');
-            itemVersionElement.textContent = versionKey;
-
-            var itemCountElement = document.createElement('p');
-            itemCountElement.textContent = 'Count: ' + item.count;
-
-            itemCard.appendChild(itemNameElement);
-            itemCard.appendChild(itemVersionElement);
-            itemCard.appendChild(itemCountElement);
-            itemListElement.appendChild(itemCard);
-
             totalItemCount += item.count;
           }
         }
