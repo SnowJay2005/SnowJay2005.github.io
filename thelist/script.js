@@ -10,7 +10,7 @@ var itemList = [
     count: 18,
     image: 'path/to/barbarian-image.jpg',
     description: 'Description of Barbarian'
-  }
+  },
   // Add other items here
 ];
 
