@@ -17,84 +17,48 @@ var totalElement = document.getElementById('total');
 
 // Function to display the item list
 function displayItemList() {
-  var itemListRef = db.ref('items');
-
-  itemListRef.on('value', function(snapshot) {
-    var items = snapshot.val();
+  db.ref('items').on('value', function (snapshot) {
     itemListElement.innerHTML = '';
 
     try {
-      for (var itemKey in items) {
-        if (items.hasOwnProperty(itemKey)) {
-          var item = items[itemKey];
+      snapshot.forEach(function (childSnapshot) {
+        var item = childSnapshot.val();
+        var itemKey = childSnapshot.key; // Retrieve the key of the item
 
-          var itemCard = document.createElement('div');
-          itemCard.classList.add('item-card');
+        var itemCard = document.createElement('div');
+        itemCard.classList.add('item-card');
 
-          var itemName = document.createElement('a');
-          itemName.textContent = item.name;
-          itemName.href = 'item.html#' + encodeURIComponent(item.name);
+        var itemName = document.createElement('a');
+        itemName.textContent = item.name;
+        itemName.href = 'item.html#' + encodeURIComponent(item.name);
 
-          var itemCount = document.createElement('p');
-          itemCount.textContent = 'Count: ' + item.count;
+        var itemCount = document.createElement('p');
+        itemCount.textContent = 'Count: ' + item.count;
 
-          var editButton = document.createElement('button');
-          editButton.textContent = 'Edit';
-          editButton.addEventListener('click', createEditItemHandler(itemKey));
+        var editButton = document.createElement('button');
+        editButton.textContent = 'Edit';
+        editButton.addEventListener('click', function () {
+          editItem(itemKey, item); // Pass the key and item to the edit function
+        });
 
-          var deleteButton = document.createElement('button');
-          deleteButton.textContent = 'Delete';
-          deleteButton.addEventListener('click', createDeleteItemHandler(itemKey));
+        var deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Delete';
+        deleteButton.addEventListener('click', function () {
+          deleteItem(itemKey); // Pass the key to the delete function
+        });
 
-          itemCard.appendChild(itemName);
-          itemCard.appendChild(itemCount);
+        itemCard.appendChild(itemName);
+        itemCard.appendChild(itemCount);
+        itemCard.appendChild(editButton);
+        itemCard.appendChild(deleteButton);
+        itemListElement.appendChild(itemCard);
+      });
 
-          if (itemListElement === adminItemListElement) {
-            itemCard.appendChild(editButton);
-            itemCard.appendChild(deleteButton);
-          }
-
-          itemListElement.appendChild(itemCard);
-        }
-      }
-
-      // Update the total count
-      totalElement.textContent = Object.keys(items).length;
+      totalElement.textContent = snapshot.numChildren();
     } catch (e) {
       console.error(e);
     }
   });
-}
-
-// Helper function to handle editing an item
-function editItem(itemKey) {
-  var itemRef = db.ref('items/' + itemKey);
-
-  itemRef.once('value', function(snapshot) {
-    var item = snapshot.val();
-
-    // Prompt the user for new item details
-    var newName = prompt('Enter new name', item.name);
-    var newCount = parseInt(prompt('Enter new count', item.count));
-    var newImage = prompt('Enter new image URL', item.image);
-    var newDescription = prompt('Enter new description', item.description);
-
-    // Update the item with new values
-    itemRef.update({
-      name: newName,
-      count: newCount,
-      image: newImage,
-      description: newDescription
-    });
-  });
-}
-
-// Helper function to handle deleting an item
-function deleteItem(itemKey) {
-  var itemRef = db.ref('items/' + itemKey);
-
-  // Remove the item from the database
-  itemRef.remove();
 }
 
 // Add an event listener for the form submission
