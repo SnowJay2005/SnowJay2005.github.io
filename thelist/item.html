@@ -19,24 +19,5 @@
   
 
   <script src="script.js"></script>
-  <script>
-    // Update the item page with the content of the selected item
-    function updateItemPage() {
-      var itemName = decodeURIComponent(window.location.hash.substring(1));
-      var item = findItemByName(itemName);
-
-      if (item) {
-        var itemNameElement = document.getElementById('item-name');
-        var itemImageElement = document.getElementById('item-image');
-        var itemDescriptionElement = document.getElementById('item-description');
-
-        itemNameElement.textContent = item.name;
-        itemImageElement.src = item.image;
-        itemDescriptionElement.textContent = item.description;
-      }
-    }
-
-    updateItemPage();
-  </script>
 </body>
 </html>
