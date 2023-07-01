@@ -46,32 +46,11 @@ function displayItemList() {
   });
 }
 
-
-// Find an item in the itemList array by its name
-function findItemByName(name) {
-  for (var i = 0; i < itemList.length; i++) {
-    if (itemList[i].name === name) {
-      return itemList[i];
-    }
-  }
-  return null;
-}
-
-// Update the item page with the content of the selected item
-function updateItemPage(item) {
-  var itemNameElement = document.getElementById('item-name');
-  var itemCountElement = document.getElementById('item-count');
-  var itemImageElement = document.getElementById('item-image');
-  var itemDescriptionElement = document.getElementById('item-description');
-
-  itemNameElement.textContent = item.name;
-  itemCountElement.textContent = 'Count: ' + item.count.toString();
-  itemImageElement.src = item.image;
-  itemDescriptionElement.textContent = item.description;
-}
+// Call the displayItemList function to populate the item list on the index.html page
+displayItemList();
 
 // Load the item content based on the URL hash
-function loadItemContent() {
+window.addEventListener('DOMContentLoaded', function() {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
@@ -92,12 +71,4 @@ function loadItemContent() {
     .catch(function(error) {
       console.log('Error getting item:', error);
     });
-}
-
-// Call the displayItemList function to populate the item list on the index.html page
-displayItemList();
-
-// Load the item content based on the URL hash
-window.addEventListener('DOMContentLoaded', function() {
-  loadItemContent();
 });
