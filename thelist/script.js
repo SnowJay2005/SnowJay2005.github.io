@@ -15,12 +15,14 @@ itemListElement.addEventListener('click', onItemClick);
 // Event handler for item click
 function onItemClick(event) {
   event.preventDefault();
-  
+
   var target = event.target;
   if (target.tagName === 'A') {
     var item = findItemByName(target.textContent.trim());
     if (item) {
-      updateItemPage(item);
+      // Construct the URL for the individual item page dynamically
+      var itemPageURL = 'item.html' + '#' + encodeURIComponent(item.name);
+      window.location.href = itemPageURL;
     }
   }
 }
