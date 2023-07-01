@@ -1,39 +1,36 @@
-// Retrieve the item name from the URL
+// Get the item name from the URL hash
 var itemName = decodeURIComponent(window.location.hash.substr(1));
 
-// Get a reference to the versions of the selected item
-var versionsRef = db.ref('items/' + itemName);
+// Display the item name
+var itemNameElement = document.getElementById('item-name');
+itemNameElement.textContent = itemName;
 
-// Function to display the versions of the selected item
+// Function to display the versions of an item
 function displayVersions() {
-  versionsRef.on('value', function (snapshot) {
+  db.ref('items/' + itemName).on('value', function (snapshot) {
     versionsListElement.innerHTML = '';
 
     try {
       snapshot.forEach(function (childSnapshot) {
-        var version = childSnapshot.key; // Get the version key
-        var versionData = childSnapshot.val(); // Get the version data
+        var versionKey = childSnapshot.key; // Retrieve the key of the version
+        var version = childSnapshot.val();
 
         var versionCard = document.createElement('div');
         versionCard.classList.add('version-card');
 
-        var versionName = document.createElement('h2');
-        versionName.textContent = version;
-
         var versionCount = document.createElement('p');
-        versionCount.textContent = 'Count: ' + versionData.count;
-
-        var versionDescription = document.createElement('p');
-        versionDescription.textContent = 'Description: ' + versionData.description;
+        versionCount.textContent = 'Count: ' + version.count;
 
         var versionImage = document.createElement('img');
-        versionImage.src = versionData.image;
-        versionImage.alt = version;
+        versionImage.src = version.image;
+        versionImage.alt = 'Version Image';
 
-        versionCard.appendChild(versionName);
+        var versionDescription = document.createElement('p');
+        versionDescription.textContent = 'Description: ' + version.description;
+
         versionCard.appendChild(versionCount);
-        versionCard.appendChild(versionDescription);
         versionCard.appendChild(versionImage);
+        versionCard.appendChild(versionDescription);
         versionsListElement.appendChild(versionCard);
       });
     } catch (e) {
@@ -42,5 +39,5 @@ function displayVersions() {
   });
 }
 
-// Call the function to display the versions
+// Call the displayVersions function to show the versions of the item
 displayVersions();
