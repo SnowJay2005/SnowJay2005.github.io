@@ -1,3 +1,5 @@
+import { db } from "./firebase.js";
+
 // Display the list of items on the index.html page
 function displayItemList() {
   db.collection('items').onSnapshot((snapshot) => {
