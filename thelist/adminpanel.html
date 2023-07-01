@@ -2,84 +2,54 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Admin Page</title>
-  <link rel="icon" type="image/x-icon" href="thelist/favicon.ico">
-  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
-  <script src="admin.js"></script>
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
 </head>
 <body>
-  <h1>Admin Page</h1>
+  <header>
+    <h1>Admin Panel</h1>
+    <h2>Total: <span id="total">0</span></h2>
+  </header>
 
-  <form id="adminForm">
-    <label for="itemName">Item Name:</label>
-    <input type="text" id="itemName" required><br>
+  <section>
+    <h2>Add New Item</h2>
+    <form id="admin-form">
+      <label for="item-name">Item Name:</label>
+      <input type="text" id="item-name" required>
+    
+      <label for="item-count">Count:</label>
+      <input type="number" id="item-count" required>
+    
+      <label for="item-version">Version:</label>
+      <input type="text" id="item-version" required>
+    
+      <label for="item-image">Image URL:</label>
+      <input type="text" id="item-image" required>
+    
+      <label for="item-description">Description:</label>
+      <textarea id="item-description" required></textarea>
+    
+      <button type="submit">Add Item</button>
+    </form>    
+  </section>
 
-    <label for="tags">Tags (comma-separated):</label>
-    <input type="text" id="tags"><br>
+  <section id="item-list">
+    <!-- List of items will be dynamically generated here -->
+  </section>
 
-    <label for="version">Version:</label>
-    <input type="number" id="version" required><br>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.7.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.7.0/firebase-database.js"></script>
 
-    <button type="submit">Add Version</button>
-  </form>
-
+  <!-- Admin panel script -->
+  <script src="admin.js"></script>
   <script>
-    // Initialize Firebase
-        var firebaseConfig = {
-      apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
-      authDomain: "the-list-175d3.firebaseapp.com",
-      databaseURL: "https://the-list-175d3-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "the-list-175d3",
-      storageBucket: "the-list-175d3.appspot.com",
-      messagingSenderId: "133562798111",
-      appId: "1:133562798111:web:34a18cd64c6202314cc52a"
-    };
-
-    // Initialize Firebase app
-    firebase.initializeApp(firebaseConfig);
-
-    // Get a reference to the Firebase database
-    const database = firebase.database();
-
-    // Get form element
-    const form = document.getElementById('adminForm');
-
-    // Add event listener to the form submit event
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-
-      // Get input values
-      const itemName = document.getElementById('itemName').value.trim();
-      const tags = document.getElementById('tags').value.trim();
-      const version = parseInt(document.getElementById('version').value.trim());
-
-      // Split tags into an array
-      const tagArray = tags.split(',');
-
-      // Remove leading and trailing spaces from each tag
-      const trimmedTags = tagArray.map(tag => tag.trim());
-
-      // Generate a key based on item name and tags
-      const key = generateKey(itemName, trimmedTags);
-
-      // Add the version and its count to Firebase
-      database.ref('items/' + itemName + '/' + key).set(version, function(error) {
-        if (error) {
-          console.log('Error adding version: ' + error);
-        } else {
-          console.log('Version added successfully');
-          // Clear the form after successful submission
-          form.reset();
-        }
-      });
-    });
-
-    // Function to generate a key based on item name and tags
-    function generateKey(itemName, tags) {
-      const sortedTags = tags.sort().join('_');
-      return itemName + '_' + sortedTags;
-    }
+    // Update the total count
+    var totalElement = document.getElementById('total');
+    totalElement.textContent = itemList.reduce(function (acc, item) {
+      return acc + item.count;
+    }, 0);
   </script>
 </body>
 </html>
