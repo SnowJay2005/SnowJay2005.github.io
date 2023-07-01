@@ -151,12 +151,12 @@ function editItem(itemName, versionKey, version) {
   var newDescription = prompt('Enter a new description:', version.description);
 
   if (!isNaN(newCount) && newImage && newDescription) {
-    var updates = {};
-    updates['items/' + itemName + '/' + versionKey + '/count'] = newCount;
-    updates['items/' + itemName + '/' + versionKey + '/image'] = newImage;
-    updates['items/' + itemName + '/' + versionKey + '/description'] = newDescription;
-
-    db.ref().update(updates)
+    var itemRef = db.ref('items/' + itemName + '/' + versionKey);
+    itemRef.update({
+      count: newCount,
+      image: newImage,
+      description: newDescription
+    })
       .then(function() {
         console.log('Item version updated successfully');
       })
