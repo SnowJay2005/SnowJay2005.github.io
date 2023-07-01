@@ -1,6 +1,6 @@
 // Import the Firebase SDK
 import firebase from 'firebase/app';
-import 'firebase/database';
+import 'firebase/firestore';
 
 // Firebase configuration
 const firebaseConfig = {
