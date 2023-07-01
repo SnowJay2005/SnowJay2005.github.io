@@ -20,48 +20,64 @@ function displayItemList() {
   var itemListRef = db.ref('items');
 
   itemListRef.on('value', function(snapshot) {
+    var items = snapshot.val();
     itemListElement.innerHTML = '';
 
     try {
-      snapshot.forEach(function(childSnapshot) {
-        var item = childSnapshot.val();
-        var itemKey = childSnapshot.key;
+      for (var itemKey in items) {
+        if (items.hasOwnProperty(itemKey)) {
+          var item = items[itemKey];
 
-        var itemCard = document.createElement('div');
-        itemCard.classList.add('item-card');
+          var itemCard = document.createElement('div');
+          itemCard.classList.add('item-card');
 
-        var itemName = document.createElement('a');
-        itemName.textContent = item.name;
-        itemName.href = 'item.html#' + encodeURIComponent(item.name);
+          var itemName = document.createElement('a');
+          itemName.textContent = item.name;
+          itemName.href = 'item.html#' + encodeURIComponent(item.name);
 
-        var itemCount = document.createElement('p');
-        itemCount.textContent = 'Count: ' + item.count;
+          var itemCount = document.createElement('p');
+          itemCount.textContent = 'Count: ' + item.count;
 
-        var editButton = document.createElement('button');
-        editButton.textContent = 'Edit';
-        editButton.addEventListener('click', function() {
-          editItem(itemKey);
-        });
+          var editButton = document.createElement('button');
+          editButton.textContent = 'Edit';
+          editButton.addEventListener('click', createEditItemHandler(itemKey));
 
-        var deleteButton = document.createElement('button');
-        deleteButton.textContent = 'Delete';
-        deleteButton.addEventListener('click', function() {
-          deleteItem(itemKey);
-        });
+          var deleteButton = document.createElement('button');
+          deleteButton.textContent = 'Delete';
+          deleteButton.addEventListener('click', createDeleteItemHandler(itemKey));
 
-        itemCard.appendChild(itemName);
-        itemCard.appendChild(itemCount);
-        itemCard.appendChild(editButton);
-        itemCard.appendChild(deleteButton);
-        itemListElement.appendChild(itemCard);
-      });
+          itemCard.appendChild(itemName);
+          itemCard.appendChild(itemCount);
+
+          if (itemListElement === adminItemListElement) {
+            itemCard.appendChild(editButton);
+            itemCard.appendChild(deleteButton);
+          }
+
+          itemListElement.appendChild(itemCard);
+        }
+      }
 
       // Update the total count
-      totalElement.textContent = snapshot.numChildren();
+      totalElement.textContent = Object.keys(items).length;
     } catch (e) {
       console.error(e);
     }
   });
+}
+
+// Helper function to create the edit item handler with a specific item key
+function createEditItemHandler(itemKey) {
+  return function() {
+    editItem(itemKey);
+  };
+}
+
+// Helper function to create the delete item handler with a specific item key
+function createDeleteItemHandler(itemKey) {
+  return function() {
+    deleteItem(itemKey);
+  };
 }
 
 // Add an event listener for the form submission
