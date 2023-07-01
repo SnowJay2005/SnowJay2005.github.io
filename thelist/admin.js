@@ -31,6 +31,9 @@ function displayItemList(items) {
     var itemCount = document.createElement('p');
     itemCount.textContent = 'Count: ' + item.count;
 
+    var itemVersion = document.createElement('p');
+    itemVersion.textContent = 'Version: ' + item.version;
+
     var itemImage = document.createElement('img');
     itemImage.src = item.image;
     itemImage.alt = item.name;
@@ -52,6 +55,7 @@ function displayItemList(items) {
 
     itemCard.appendChild(itemName);
     itemCard.appendChild(itemCount);
+    itemCard.appendChild(itemVersion);
     itemCard.appendChild(itemImage);
     itemCard.appendChild(itemDescription);
     itemCard.appendChild(editButton);
@@ -62,36 +66,38 @@ function displayItemList(items) {
 
 // Add an event listener for the form submission
 var newItemForm = document.getElementById('new-item-form');
-newItemForm.addEventListener('submit', function (event) {
-  event.preventDefault(); // Prevent the form from submitting and refreshing the page
+if (newItemForm) {
+  newItemForm.addEventListener('submit', function (event) {
+    event.preventDefault(); // Prevent the form from submitting and refreshing the page
 
-  // Get the input values
-  var itemName = document.getElementById('item-name').value;
-  var itemCount = parseInt(document.getElementById('item-count').value);
-  var itemVersion = document.getElementById('item-version').value;
-  var itemImage = document.getElementById('item-image').value;
-  var itemDescription = document.getElementById('item-description').value;
+    // Get the input values
+    var itemName = document.getElementById('item-name').value;
+    var itemCount = parseInt(document.getElementById('item-count').value);
+    var itemVersion = document.getElementById('item-version').value;
+    var itemImage = document.getElementById('item-image').value;
+    var itemDescription = document.getElementById('item-description').value;
 
-  // Create a new item object
-  var newItem = {
-    name: itemName,
-    count: itemCount,
-    version: itemVersion,
-    image: itemImage,
-    description: itemDescription
-  };
+    // Create a new item object
+    var newItem = {
+      name: itemName,
+      count: itemCount,
+      version: itemVersion,
+      image: itemImage,
+      description: itemDescription
+    };
 
-  // Save the new item to Firebase
-  var newItemRef = db.ref('items').push();
-  newItemRef.set(newItem)
-    .then(function () {
-      console.log('New item added successfully');
-      newItemForm.reset(); // Reset the form fields
-    })
-    .catch(function (error) {
-      console.error('Error adding new item:', error);
-    });
-});
+    // Save the new item to Firebase
+    var newItemRef = db.ref('items').push();
+    newItemRef.set(newItem)
+      .then(function () {
+        console.log('New item added successfully');
+        newItemForm.reset(); // Reset the form fields
+      })
+      .catch(function (error) {
+        console.error('Error adding new item:', error);
+      });
+  });
+}
 
 // Listen for changes in the items data and update the item list
 db.ref('items').on('value', function (snapshot) {
@@ -128,19 +134,6 @@ window.addEventListener('DOMContentLoaded', function () {
     .catch(function (error) {
       console.log('Error getting item:', error);
     });
-});
-
-// Call the displayItemList function to populate the item list on the index.html page
-db.ref('items').once('value', function (snapshot) {
-  var items = [];
-
-  snapshot.forEach(function (childSnapshot) {
-    var item = childSnapshot.val();
-    item.key = childSnapshot.key; // Add the key to the item object
-    items.push(item);
-  });
-
-  displayItemList(items);
 });
 
 // Function to handle editing an item
