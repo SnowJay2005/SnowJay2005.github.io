@@ -31,23 +31,24 @@
 
   <script src="firebase.js" type="module"></script>
   <script>
+    // Update the form submission code
     const form = document.getElementById('new-item-form');
-
+  
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-
+  
       const name = document.getElementById('item-name').value;
       const count = parseInt(document.getElementById('item-count').value);
       const image = document.getElementById('item-image').value;
       const description = document.getElementById('item-description').value;
-
-      db.ref('items').push({
+  
+      db.collection('items').add({
         name,
         count,
         image,
         description,
       });
-
+  
       form.reset();
     });
   </script>
