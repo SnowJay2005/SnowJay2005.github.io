@@ -30,8 +30,26 @@ function displayItemList(items) {
     var itemCount = document.createElement('p');
     itemCount.textContent = 'Count: ' + item.count;
 
+    // Create the edit button
+    var editButton = document.createElement('button');
+    editButton.textContent = 'Edit';
+    editButton.addEventListener('click', function() {
+      // Handle edit functionality here
+      console.log('Edit item:', item);
+    });
+
+    // Create the delete button
+    var deleteButton = document.createElement('button');
+    deleteButton.textContent = 'Delete';
+    deleteButton.addEventListener('click', function() {
+      // Handle delete functionality here
+      console.log('Delete item:', item);
+    });
+
     itemCard.appendChild(itemName);
     itemCard.appendChild(itemCount);
+    itemCard.appendChild(editButton);
+    itemCard.appendChild(deleteButton);
     itemListElement.appendChild(itemCard);
   });
 
