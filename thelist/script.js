@@ -33,14 +33,12 @@ function displayItemList(items) {
     var editButton = document.createElement('button');
     editButton.textContent = 'Edit';
     editButton.addEventListener('click', function() {
-      // Call the editItem function with the item object
       editItem(item);
     });
 
     var deleteButton = document.createElement('button');
     deleteButton.textContent = 'Delete';
     deleteButton.addEventListener('click', function() {
-      // Call the deleteItem function with the item object
       deleteItem(item);
     });
 
@@ -51,7 +49,6 @@ function displayItemList(items) {
     itemListElement.appendChild(itemCard);
   });
 
-  // Update the total count
   totalElement.textContent = items.length;
 }
 
@@ -136,14 +133,26 @@ db.ref('items').once('value', function(snapshot) {
 
 // Function to handle editing an item
 function editItem(item) {
-  // You can implement the edit functionality here
-  // For example, you can show a form to edit the item's details
-  console.log('Edit item:', item);
+  var newName = prompt('Enter a new name:', item.name);
+  var newCount = parseInt(prompt('Enter a new count:', item.count), 10);
+  var newImage = prompt('Enter a new image URL:', item.image);
+  var newDescription = prompt('Enter a new description:', item.description);
+
+  if (newName && !isNaN(newCount) && newImage && newDescription) {
+    item.name = newName;
+    item.count = newCount;
+    item.image = newImage;
+    item.description = newDescription;
+
+    // Update the item in the database
+    db.ref('items/' + item.key).update(item);
+  }
 }
 
 // Function to handle deleting an item
 function deleteItem(item) {
-  // You can implement the delete functionality here
-  // For example, you can prompt the user for confirmation and then delete the item from the database
-  console.log('Delete item:', item);
+  if (confirm('Are you sure you want to delete this item?')) {
+    // Remove the item from the database
+    db.ref('items/' + item.key).remove();
+  }
 }
