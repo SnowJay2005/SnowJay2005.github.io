@@ -31,29 +31,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/9.6.2/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.2/firebase-firestore.js"></script>
-  <script src="firebase.js"></script>
-  <script src="script.js"></script>
-  <script>
-    const form = document.getElementById('new-item-form');
-    const db = firebase.firestore();
-
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-
-      const name = document.getElementById('item-name').value;
-      const count = parseInt(document.getElementById('item-count').value);
-      const image = document.getElementById('item-image').value;
-      const description = document.getElementById('item-description').value;
-
-      db.collection('items').add({
-        name,
-        count,
-        image,
-        description,
-      });
-
-      form.reset();
-    });
-  </script>
+  <script src="firebase.js" type="module"></script>
+  <script src="script.js" type="module"></script>
 </body>
 </html>
