@@ -13,38 +13,11 @@ var itemList = [
   // Add other items here
 ];
 
-// Get the item list element and attach a click event listener
+// Get the item list element
 var itemListElement = document.getElementById('item-list');
-itemListElement.addEventListener('click', onItemClick);
 
-// Event handler for item click
-function onItemClick(event) {
-  event.preventDefault();
-
-  var target = event.target;
-  if (target.tagName === 'A') {
-    var item = findItemByName(target.textContent.trim());
-    if (item) {
-      // Construct the URL for the individual item page dynamically
-      var itemPageURL = 'item.html#' + encodeURIComponent(item.name);
-      window.location.href = itemPageURL;
-    }
-  }
-}
-
-// Find an item in the itemList array by its name
-function findItemByName(name) {
-  for (var i = 0; i < itemList.length; i++) {
-    if (itemList[i].name === name) {
-      return itemList[i];
-    }
-  }
-  return null;
-}
-
-// Display the list of items
+// Display the list of items on the index.html page
 function displayItemList() {
-  var itemListElement = document.getElementById('item-list');
   itemListElement.innerHTML = '';
 
   for (var i = 0; i < itemList.length; i++) {
@@ -66,5 +39,45 @@ function displayItemList() {
   }
 }
 
+// Find an item in the itemList array by its name
+function findItemByName(name) {
+  for (var i = 0; i < itemList.length; i++) {
+    if (itemList[i].name === name) {
+      return itemList[i];
+    }
+  }
+  return null;
+}
+
+// Update the item page with the content of the selected item
+function updateItemPage(item) {
+  var itemNameElement = document.getElementById('item-name');
+  var itemImageElement = document.getElementById('item-image');
+  var itemDescriptionElement = document.getElementById('item-description');
+
+  itemNameElement.textContent = item.name;
+  itemImageElement.src = item.image;
+  itemDescriptionElement.textContent = item.description;
+}
+
+// Load the item content based on the URL hash
+function loadItemContent() {
+  var itemHash = window.location.hash.substr(1);
+  var itemName = decodeURIComponent(itemHash);
+
+  var item = findItemByName(itemName);
+  if (item) {
+    updateItemPage(item);
+  } else {
+    // Handle invalid or non-existing item names
+    console.log('Item not found: ' + itemName);
+  }
+}
+
 // Call the displayItemList function to populate the item list on the index.html page
 displayItemList();
+
+// Check if the page is an item page and load the item content if necessary
+if (window.location.pathname.includes('/thelist/item.html')) {
+  loadItemContent();
+}
