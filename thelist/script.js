@@ -17,13 +17,15 @@ var totalElement = document.getElementById('total');
 
 // Function to display the item list
 function displayItemList() {
-  db.ref('items').on('value', function (snapshot) {
+  var itemListRef = db.ref('items');
+
+  itemListRef.on('value', function(snapshot) {
     itemListElement.innerHTML = '';
 
     try {
-      snapshot.forEach(function (childSnapshot) {
+      snapshot.forEach(function(childSnapshot) {
         var item = childSnapshot.val();
-        var itemKey = childSnapshot.key; // Retrieve the key of the item
+        var itemKey = childSnapshot.key;
 
         var itemCard = document.createElement('div');
         itemCard.classList.add('item-card');
@@ -37,14 +39,14 @@ function displayItemList() {
 
         var editButton = document.createElement('button');
         editButton.textContent = 'Edit';
-        editButton.addEventListener('click', function () {
-          editItem(itemKey, item); // Pass the key and item to the edit function
+        editButton.addEventListener('click', function() {
+          editItem(itemKey);
         });
 
         var deleteButton = document.createElement('button');
         deleteButton.textContent = 'Delete';
-        deleteButton.addEventListener('click', function () {
-          deleteItem(itemKey); // Pass the key to the delete function
+        deleteButton.addEventListener('click', function() {
+          deleteItem(itemKey);
         });
 
         itemCard.appendChild(itemName);
@@ -54,6 +56,7 @@ function displayItemList() {
         itemListElement.appendChild(itemCard);
       });
 
+      // Update the total count
       totalElement.textContent = snapshot.numChildren();
     } catch (e) {
       console.error(e);
