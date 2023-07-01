@@ -37,17 +37,18 @@ function displayItemList() {
 
         // Create a container div for the item
         var itemContainer = document.createElement('div');
-        itemContainer.classList.add('item-container');
+        itemContainer.classList.add('item-card');
 
         // Display the item name
-        var itemNameElement = document.createElement('p');
+        var itemNameElement = document.createElement('a');
         itemNameElement.classList.add('item-name');
         itemNameElement.textContent = itemName;
+        itemNameElement.href = 'versions.html#' + encodeURIComponent(itemName);
         itemContainer.appendChild(itemNameElement);
 
         // Display the total count for the item
         var totalItemElement = document.createElement('p');
-        totalItemElement.classList.add('item-total');
+        totalItemElement.classList.add('item-count');
         totalItemElement.textContent = 'Total Count: ' + totalItemCount;
         itemContainer.appendChild(totalItemElement);
 
