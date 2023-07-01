@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <header>
+    <h1>Admin Panel</h1>
+  </header>
+
+  <section>
+    <h2>Add New Item</h2>
+    <form id="new-item-form">
+      <label for="item-name">Name:</label>
+      <input type="text" id="item-name" required>
+
+      <label for="item-count">Count:</label>
+      <input type="number" id="item-count" required>
+
+      <label for="item-image">Image:</label>
+      <input type="text" id="item-image" required>
+
+      <label for="item-description">Description:</label>
+      <textarea id="item-description" required></textarea>
+
+      <button type="submit">Add Item</button>
+    </form>
+  </section>
+
+  <script src="../firebase.js" type="module"></script>
+  <script>
+    const form = document.getElementById('new-item-form');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('item-name').value;
+      const count = parseInt(document.getElementById('item-count').value);
+      const image = document.getElementById('item-image').value;
+      const description = document.getElementById('item-description').value;
+
+      db.ref('items').push({
+        name,
+        count,
+        image,
+        description,
+      });
+
+      form.reset();
+    });
+  </script>
+</body>
+</html>

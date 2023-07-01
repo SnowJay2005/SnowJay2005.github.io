@@ -78,3 +78,8 @@ function loadItemContent() {
 
 // Call the displayItemList function to populate the item list on the index.html page
 displayItemList();
+
+// Load the item content based on the URL hash
+window.addEventListener('DOMContentLoaded', function() {
+  loadItemContent();
+});
