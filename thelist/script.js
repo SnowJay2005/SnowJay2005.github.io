@@ -15,6 +15,30 @@ var db = firebase.database();
 var itemListElement = document.getElementById('item-list');
 var totalElement = document.getElementById('total');
 
+// Function to display the item list
+function displayItemList(items) {
+  itemListElement.innerHTML = '';
+
+  items.forEach(function(item) {
+    var itemCard = document.createElement('div');
+    itemCard.classList.add('item-card');
+
+    var itemName = document.createElement('a');
+    itemName.textContent = item.name;
+    itemName.href = 'item.html#' + encodeURIComponent(item.name);
+
+    var itemCount = document.createElement('p');
+    itemCount.textContent = 'Count: ' + item.count;
+
+    itemCard.appendChild(itemName);
+    itemCard.appendChild(itemCount);
+    itemListElement.appendChild(itemCard);
+  });
+
+  // Update the total count
+  totalElement.textContent = items.length;
+}
+
 // Add an event listener for the form submission
 var newItemForm = document.getElementById('new-item-form');
 newItemForm.addEventListener('submit', function(event) {
@@ -48,102 +72,15 @@ newItemForm.addEventListener('submit', function(event) {
 
 // Listen for changes in the items data and update the item list
 db.ref('items').on('value', function(snapshot) {
-  itemListElement.innerHTML = '';
+  var items = [];
 
-  try {
-    snapshot.forEach(function(childSnapshot) {
-      var item = childSnapshot.val();
-      var itemId = childSnapshot.key; // Get the unique item ID
+  snapshot.forEach(function(childSnapshot) {
+    var item = childSnapshot.val();
+    items.push(item);
+  });
 
-      var itemCard = document.createElement('div');
-      itemCard.classList.add('item-card');
-
-      var itemName = document.createElement('a');
-      itemName.textContent = item.name;
-      itemName.href = 'item.html#' + encodeURIComponent(item.name);
-
-      var itemCount = document.createElement('p');
-      itemCount.textContent = 'Count: ' + item.count;
-
-      // Add an edit button
-      var editButton = document.createElement('button');
-      editButton.textContent = 'Edit';
-      editButton.addEventListener('click', function() {
-        // Prompt the user to update the item count
-        var newCount = prompt('Enter the new count for ' + item.name);
-        if (newCount !== null && !isNaN(newCount)) {
-          // Update the item count in the database
-          db.ref('items/' + itemId + '/count').set(parseInt(newCount))
-            .then(function() {
-              console.log('Item count updated successfully');
-            })
-            .catch(function(error) {
-              console.error('Error updating item count:', error);
-            });
-        }
-      });
-
-      // Add a delete button
-      var deleteButton = document.createElement('button');
-      deleteButton.textContent = 'Delete';
-      deleteButton.addEventListener('click', function() {
-        // Confirm deletion with the user
-        var confirmDelete = confirm('Are you sure you want to delete ' + item.name + '?');
-        if (confirmDelete) {
-          // Remove the item from the database
-          db.ref('items/' + itemId).remove()
-            .then(function() {
-              console.log('Item deleted successfully');
-            })
-            .catch(function(error) {
-              console.error('Error deleting item:', error);
-            });
-        }
-      });
-
-      itemCard.appendChild(itemName);
-      itemCard.appendChild(itemCount);
-      itemCard.appendChild(editButton);
-      itemCard.appendChild(deleteButton);
-      itemListElement.appendChild(itemCard);
-    });
-
-    // Update the total count
-    totalElement.textContent = snapshot.numChildren();
-  } catch (e) {
-    console.error(e);
-  }
+  displayItemList(items);
 });
-
-function addItem() {
-  var itemNameInput = document.getElementById('item-name');
-  var itemCountInput = document.getElementById('item-count');
-  var itemImageInput = document.getElementById('item-image');
-  var itemDescriptionInput = document.getElementById('item-description');
-
-  var newItem = {
-    name: itemNameInput.value,
-    count: parseInt(itemCountInput.value),
-    image: itemImageInput.value,
-    description: itemDescriptionInput.value
-  };
-
-  db.ref('items')
-    .push(newItem)
-    .then(function() {
-      console.log('Item added successfully');
-      itemNameInput.value = '';
-      itemCountInput.value = '';
-      itemImageInput.value = '';
-      itemDescriptionInput.value = '';
-    })
-    .catch(function(error) {
-      console.log('Error adding item:', error);
-    });
-}
-
-// Call the displayItemList function to populate the item list on the index.html page
-displayItemList();
 
 // Load the item content based on the URL hash
 window.addEventListener('DOMContentLoaded', function() {
