@@ -13,12 +13,16 @@
   <main id="item-content">
     <h2 id="item-name">Item Name</h2>
     <p id="item-count">Count: </p>
-    <input type="number" id="item-count-input" min="0">
-    <button id="update-count-btn">Update Count</button>
     <img id="item-image" src="path/to/item-image.jpg" alt="Item Name Image">
     <p id="item-description">Additional description or information about the item.</p>
   </main>
-
+  
   <script src="script.js"></script>
+  <script>
+    // Load the item content based on the URL hash
+    window.addEventListener('DOMContentLoaded', function() {
+      loadItemContent();
+    });
+  </script>
 </body>
 </html>

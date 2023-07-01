@@ -6,68 +6,15 @@ var Item = function(name, count, image, description) {
   this.description = description;
 };
 
-// Global variable to hold the item data
-var itemList = [];
+// Define the itemList array with item objects
+var itemList = [
+  new Item('Realistic Sans', 25, 'path/to/realistic-sans-image.jpg', 'Description of Realistic Sans'),
+  new Item('Barbarian', 18, 'path/to/barbarian-image.jpg', 'Description of Barbarian')
+  // Add other items here
+];
 
-// Fetch the item data from the JSON file
-function fetchItemList() {
-  fetch('items.json')
-    .then(function(response) {
-      return response.json();
-    })
-    .then(function(data) {
-      itemList = data;
-      displayItemList();
-    })
-    .catch(function(error) {
-      console.log('Error fetching item data:', error);
-    });
-}
-
-// Save the item data to the JSON file
-function saveItemList() {
-  var githubToken = process.env.THELIST_TOKEN;
-  var repositoryOwner = 'SnowJay2005';
-  var repositoryName = 'SnowJay2005.github.io';
-  var filePath = 'thelist/items.json';
-  var branchName = 'main';
-
-  var content = btoa(JSON.stringify(itemList, null, 2));
-  var message = 'Update item data';
-  var url = `https://api.github.com/repos/${repositoryOwner}/${repositoryName}/contents/${filePath}`;
-
-  fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${githubToken}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
-    body: JSON.stringify({
-      message: message,
-      content: content,
-      branch: branchName,
-    }),
-  })
-    .then(function (response) {
-      if (response.ok) {
-        console.log('Item data saved successfully');
-      } else {
-        throw new Error('Failed to save item data');
-      }
-    })
-    .catch(function (error) {
-      console.log('Error saving item data:', error);
-    });
-}
-
-// Update the item count
-function updateItemCount(itemName, count) {
-  var item = findItemByName(itemName);
-  if (item) {
-    item.count = count;
-    saveItemList();
-  }
-}
+// Get the item list element
+var itemListElement = document.getElementById('item-list');
 
 // Display the list of items on the index.html page
 function displayItemList() {
@@ -129,23 +76,5 @@ function loadItemContent() {
   }
 }
 
-// Call the fetchItemList function to populate the item list from the JSON file
-fetchItemList();
-
-// Check if the page is an item page and load the item content if necessary
-if (window.location.pathname.includes('/thelist/item.html')) {
-  loadItemContent();
-}
-
-// Get the count update elements
-var itemCountInput = document.getElementById('item-count-input');
-var updateCountBtn = document.getElementById('update-count-btn');
-
-// Event listener for count update button click
-updateCountBtn.addEventListener('click', function() {
-  var count = parseInt(itemCountInput.value, 10);
-  if (!isNaN(count)) {
-    var itemName = decodeURIComponent(window.location.hash.substr(1));
-    updateItemCount(itemName, count);
-  }
-});
+// Call the displayItemList function to populate the item list on the index.html page
+displayItemList();
