@@ -1,80 +1,151 @@
-// Load the item list from the GitHub repository
-function loadItemList() {
-  fetch('https://api.github.com/repos/SnowJay2005/SnowJay2005.github.io/contents/thelist/items.json', {
-    headers: {
-      Authorization: 'Bearer ' + process.env.THELIST_TOKEN,
-      Accept: 'application/vnd.github.v3+json',
-    },
-  })
+// Create an object to hold the item data
+var Item = function(name, count, image, description) {
+  this.name = name;
+  this.count = count;
+  this.image = image;
+  this.description = description;
+};
+
+// Global variable to hold the item data
+var itemList = [];
+
+// Fetch the item data from the JSON file
+function fetchItemList() {
+  fetch('items.json')
     .then(function(response) {
-      if (response.ok) {
-        return response.json();
-      } else {
-        throw new Error('Failed to load item data');
-      }
+      return response.json();
     })
     .then(function(data) {
-      var content = atob(data.content);
-      itemList = JSON.parse(content);
+      itemList = data;
       displayItemList();
     })
     .catch(function(error) {
-      console.log('Error loading item data:', error);
+      console.log('Error fetching item data:', error);
     });
 }
 
-// Save the item list to the GitHub repository
+// Save the item data to the JSON file
 function saveItemList() {
-  fetch('https://api.github.com/repos/SnowJay2005/SnowJay2005.github.io/contents/thelist/items.json', {
+  var githubToken = process.env.THELIST_TOKEN;
+  var repositoryOwner = 'SnowJay2005';
+  var repositoryName = 'SnowJay2005.github.io';
+  var filePath = 'thelist/items.json';
+  var branchName = 'main';
+
+  var content = btoa(JSON.stringify(itemList, null, 2));
+  var message = 'Update item data';
+  var url = `https://api.github.com/repos/${repositoryOwner}/${repositoryName}/contents/${filePath}`;
+
+  fetch(url, {
     method: 'PUT',
     headers: {
-      Authorization: 'Bearer ' + process.env.THELIST_TOKEN,
+      Authorization: `Bearer ${githubToken}`,
       Accept: 'application/vnd.github.v3+json',
     },
     body: JSON.stringify({
-      message: 'Update item data',
-      content: btoa(JSON.stringify(itemList, null, 2)),
-      sha: itemDataSha,
+      message: message,
+      content: content,
+      branch: branchName,
     }),
   })
-    .then(function(response) {
+    .then(function (response) {
       if (response.ok) {
         console.log('Item data saved successfully');
       } else {
         throw new Error('Failed to save item data');
       }
     })
-    .catch(function(error) {
+    .catch(function (error) {
       console.log('Error saving item data:', error);
     });
 }
 
-// Event handler for item count update
-function onItemCountUpdate(event) {
-  var target = event.target;
-  var itemName = target.getAttribute('data-item-name');
+// Update the item count
+function updateItemCount(itemName, count) {
   var item = findItemByName(itemName);
-
   if (item) {
-    item.count = parseInt(target.value);
-    saveItemList(); // Save the item list after updating the count
+    item.count = count;
+    saveItemList();
   }
 }
 
-// Attach event listeners to item count input fields
-function attachItemCountListeners() {
-  var itemCountInputs = document.querySelectorAll('.item-count-input');
+// Display the list of items on the index.html page
+function displayItemList() {
+  itemListElement.innerHTML = '';
 
-  itemCountInputs.forEach(function(input) {
-    input.addEventListener('input', onItemCountUpdate);
-  });
+  for (var i = 0; i < itemList.length; i++) {
+    var item = itemList[i];
+
+    var itemCard = document.createElement('div');
+    itemCard.classList.add('item-card');
+
+    var itemName = document.createElement('a');
+    itemName.textContent = item.name;
+    itemName.href = 'item.html#' + encodeURIComponent(item.name);
+
+    var itemCount = document.createElement('p');
+    itemCount.textContent = 'Count: ' + item.count;
+
+    itemCard.appendChild(itemName);
+    itemCard.appendChild(itemCount);
+    itemListElement.appendChild(itemCard);
+  }
 }
 
-// Call the displayItemList function to populate the item list on the index.html page
-displayItemList();
+// Find an item in the itemList array by its name
+function findItemByName(name) {
+  for (var i = 0; i < itemList.length; i++) {
+    if (itemList[i].name === name) {
+      return itemList[i];
+    }
+  }
+  return null;
+}
 
-// Load the item list from the GitHub repository
-loadItemList();
+// Update the item page with the content of the selected item
+function updateItemPage(item) {
+  var itemNameElement = document.getElementById('item-name');
+  var itemCountElement = document.getElementById('item-count');
+  var itemImageElement = document.getElementById('item-image');
+  var itemDescriptionElement = document.getElementById('item-description');
 
-// Attach event listeners to item count input fields
-attachItemCountListeners();
+  itemNameElement.textContent = item.name;
+  itemCountElement.textContent = 'Count: ' + item.count.toString();
+  itemImageElement.src = item.image;
+  itemDescriptionElement.textContent = item.description;
+}
+
+// Load the item content based on the URL hash
+function loadItemContent() {
+  var itemHash = window.location.hash.substr(1);
+  var itemName = decodeURIComponent(itemHash);
+
+  var item = findItemByName(itemName);
+  if (item) {
+    updateItemPage(item);
+  } else {
+    // Handle invalid or non-existing item names
+    console.log('Item not found: ' + itemName);
+  }
+}
+
+// Call the fetchItemList function to populate the item list from the JSON file
+fetchItemList();
+
+// Check if the page is an item page and load the item content if necessary
+if (window.location.pathname.includes('/thelist/item.html')) {
+  loadItemContent();
+}
+
+// Get the count update elements
+var itemCountInput = document.getElementById('item-count-input');
+var updateCountBtn = document.getElementById('update-count-btn');
+
+// Event listener for count update button click
+updateCountBtn.addEventListener('click', function() {
+  var count = parseInt(itemCountInput.value, 10);
+  if (!isNaN(count)) {
+    var itemName = decodeURIComponent(window.location.hash.substr(1));
+    updateItemCount(itemName, count);
+  }
+});
