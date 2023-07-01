@@ -25,7 +25,6 @@
     var itemHash = window.location.hash.substr(1);
     var itemName = decodeURIComponent(itemHash);
 
-    // Initialize Firebase
         var firebaseConfig = {
       apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
       authDomain: "the-list-175d3.firebaseapp.com",
@@ -35,7 +34,7 @@
       messagingSenderId: "133562798111",
       appId: "1:133562798111:web:34a18cd64c6202314cc52a"
     };
-
+    
     firebase.initializeApp(firebaseConfig);
 
     // Retrieve the item from Firebase
@@ -51,15 +50,17 @@
           console.log('Item not found: ' + itemName);
           document.getElementById('item-details').innerHTML = '<p>Item not found</p>';
         } else {
-          var itemData = Object.values(snapshot.val())[0];
+          var itemData = snapshot.val();
+          var itemKey = Object.keys(itemData)[0];
+          var item = itemData[itemKey];
 
           // Generate the HTML for the item details
           var itemDetailsHTML = `
             <div class="item-card">
-              <h2>${itemData.name}</h2>
-              <p>Count: ${itemData.count}</p>
-              <img src="${itemData.image}" alt="${itemData.name}">
-              <p>${itemData.description}</p>
+              <h2>${item.name}</h2>
+              <p>Count: ${item.count}</p>
+              <img src="${item.image}" alt="${item.name}">
+              <p>${item.description}</p>
             </div>
           `;
 
