@@ -66,18 +66,35 @@ function displayItemList() {
   });
 }
 
-// Helper function to create the edit item handler with a specific item key
-function createEditItemHandler(itemKey) {
-  return function() {
-    editItem(itemKey);
-  };
+// Helper function to handle editing an item
+function editItem(itemKey) {
+  var itemRef = db.ref('items/' + itemKey);
+
+  itemRef.once('value', function(snapshot) {
+    var item = snapshot.val();
+
+    // Prompt the user for new item details
+    var newName = prompt('Enter new name', item.name);
+    var newCount = parseInt(prompt('Enter new count', item.count));
+    var newImage = prompt('Enter new image URL', item.image);
+    var newDescription = prompt('Enter new description', item.description);
+
+    // Update the item with new values
+    itemRef.update({
+      name: newName,
+      count: newCount,
+      image: newImage,
+      description: newDescription
+    });
+  });
 }
 
-// Helper function to create the delete item handler with a specific item key
-function createDeleteItemHandler(itemKey) {
-  return function() {
-    deleteItem(itemKey);
-  };
+// Helper function to handle deleting an item
+function deleteItem(itemKey) {
+  var itemRef = db.ref('items/' + itemKey);
+
+  // Remove the item from the database
+  itemRef.remove();
 }
 
 // Add an event listener for the form submission
