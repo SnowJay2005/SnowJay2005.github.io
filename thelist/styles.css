@@ -1,0 +1,36 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  
+  header {
+    background-color: #f1f1f1;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  h1 {
+    margin-top: 0;
+  }
+  
+  section#item-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 20px;
+  }
+  
+  .item-card {
+    border: 1px solid #ddd;
+    padding: 10px;
+  }
+  
+  .item-card a {
+    color: #333;
+    text-decoration: none;
+  }
+  
+  .item-card a:hover {
+    text-decoration: underline;
+  }
