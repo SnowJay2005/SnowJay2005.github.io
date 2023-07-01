@@ -22,45 +22,38 @@ function displayItemList() {
 
     try {
       snapshot.forEach(function (childSnapshot) {
-        var item = childSnapshot.val();
-        var itemKey = childSnapshot.key; // Retrieve the key of the item
+        var itemName = childSnapshot.key; // Retrieve the item name
+        var itemVersions = childSnapshot.val(); // Retrieve all versions of the item
 
-        for (var versionKey in item) {
-          if (versionKey !== 'name') {
-            var version = item[versionKey];
+        for (var versionKey in itemVersions) {
+          var version = itemVersions[versionKey]; // Retrieve each version
 
-            var itemCard = document.createElement('div');
-            itemCard.classList.add('item-card');
+          var itemCard = document.createElement('div');
+          itemCard.classList.add('item-card');
 
-            var itemName = document.createElement('a');
-            itemName.textContent = item.name;
-            itemName.href = 'item.html#' + encodeURIComponent(item.name);
+          var itemNameVersion = document.createElement('p');
+          itemNameVersion.textContent = itemName + ' - ' + versionKey;
 
-            var itemVersion = document.createElement('a');
-            itemVersion.textContent = versionKey;
+          var itemCount = document.createElement('p');
+          itemCount.textContent = 'Count: ' + version.count;
 
-            var itemCount = document.createElement('p');
-            itemCount.textContent = 'Count: ' + version.count;
+          var editButton = document.createElement('button');
+          editButton.textContent = 'Edit';
+          editButton.addEventListener('click', function () {
+            editItem(itemName, versionKey, version); // Pass the item name, version key, and version to the edit function
+          });
 
-            var editButton = document.createElement('button');
-            editButton.textContent = 'Edit';
-            editButton.addEventListener('click', function () {
-              editItem(itemKey, versionKey, version); // Pass the key, version key, and version to the edit function
-            });
+          var deleteButton = document.createElement('button');
+          deleteButton.textContent = 'Delete';
+          deleteButton.addEventListener('click', function () {
+            deleteItem(itemName, versionKey); // Pass the item name and version key to the delete function
+          });
 
-            var deleteButton = document.createElement('button');
-            deleteButton.textContent = 'Delete';
-            deleteButton.addEventListener('click', function () {
-              deleteItem(itemKey, versionKey); // Pass the key and version key to the delete function
-            });
-
-            itemCard.appendChild(itemName);
-            itemCard.appendChild(itemVersion);
-            itemCard.appendChild(itemCount);
-            itemCard.appendChild(editButton);
-            itemCard.appendChild(deleteButton);
-            itemListElement.appendChild(itemCard);
-          }
+          itemCard.appendChild(itemNameVersion);
+          itemCard.appendChild(itemCount);
+          itemCard.appendChild(editButton);
+          itemCard.appendChild(deleteButton);
+          itemListElement.appendChild(itemCard);
         }
       });
 
@@ -152,18 +145,16 @@ db.ref('items').once('value', function(snapshot) {
 });
 
 // Function to handle editing an item
-function editItem(key, versionKey, version) {
-  var newName = prompt('Enter a new name:', version.name);
+function editItem(itemName, versionKey, version) {
   var newCount = parseInt(prompt('Enter a new count:', version.count), 10);
   var newImage = prompt('Enter a new image URL:', version.image);
   var newDescription = prompt('Enter a new description:', version.description);
 
-  if (newName && !isNaN(newCount) && newImage && newDescription) {
+  if (!isNaN(newCount) && newImage && newDescription) {
     var updates = {};
-    updates['items/' + key + '/' + versionKey + '/name'] = newName;
-    updates['items/' + key + '/' + versionKey + '/count'] = newCount;
-    updates['items/' + key + '/' + versionKey + '/image'] = newImage;
-    updates['items/' + key + '/' + versionKey + '/description'] = newDescription;
+    updates['items/' + itemName + '/' + versionKey + '/count'] = newCount;
+    updates['items/' + itemName + '/' + versionKey + '/image'] = newImage;
+    updates['items/' + itemName + '/' + versionKey + '/description'] = newDescription;
 
     db.ref().update(updates);
   }
