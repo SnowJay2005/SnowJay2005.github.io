@@ -77,7 +77,7 @@ function loadItemContent() {
 
   // Query the database to find the item by name
   const itemsRef = ref(db, 'items');
-  const query = orderByChild(itemsRef, 'name').equalTo(itemName).limitToFirst(1);
+  const query = queryByChild(itemsRef, 'name').equalTo(itemName).limitToFirst(1);
   onValue(query, (snapshot) => {
     if (!snapshot.exists()) {
       // Handle invalid or non-existing item names
