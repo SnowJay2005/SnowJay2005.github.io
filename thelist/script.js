@@ -15,36 +15,105 @@ var db = firebase.database();
 var itemListElement = document.getElementById('item-list');
 var totalElement = document.getElementById('total');
 
-function displayItemList() {
-  db.ref('items').on('value', function(snapshot) {
-    itemListElement.innerHTML = '';
+// Add an event listener for the form submission
+var newItemForm = document.getElementById('new-item-form');
+newItemForm.addEventListener('submit', function(event) {
+  event.preventDefault(); // Prevent the form from submitting and refreshing the page
 
-    try {
-      snapshot.forEach(function(childSnapshot) {
-        var item = childSnapshot.val();
+  // Get the input values
+  var itemName = document.getElementById('item-name').value;
+  var itemCount = parseInt(document.getElementById('item-count').value);
+  var itemImage = document.getElementById('item-image').value;
+  var itemDescription = document.getElementById('item-description').value;
 
-        var itemCard = document.createElement('div');
-        itemCard.classList.add('item-card');
+  // Create a new item object
+  var newItem = {
+    name: itemName,
+    count: itemCount,
+    image: itemImage,
+    description: itemDescription
+  };
 
-        var itemName = document.createElement('a');
-        itemName.textContent = item.name;
-        itemName.href = 'item.html#' + encodeURIComponent(item.name);
+  // Save the new item to Firebase
+  var newItemRef = db.ref('items').push();
+  newItemRef.set(newItem)
+    .then(function() {
+      console.log('New item added successfully');
+      newItemForm.reset(); // Reset the form fields
+    })
+    .catch(function(error) {
+      console.error('Error adding new item:', error);
+    });
+});
 
-        var itemCount = document.createElement('p');
-        itemCount.textContent = 'Count: ' + item.count;
+// Listen for changes in the items data and update the item list
+db.ref('items').on('value', function(snapshot) {
+  itemListElement.innerHTML = '';
 
-        itemCard.appendChild(itemName);
-        itemCard.appendChild(itemCount);
-        itemListElement.appendChild(itemCard);
+  try {
+    snapshot.forEach(function(childSnapshot) {
+      var item = childSnapshot.val();
+      var itemId = childSnapshot.key; // Get the unique item ID
+
+      var itemCard = document.createElement('div');
+      itemCard.classList.add('item-card');
+
+      var itemName = document.createElement('a');
+      itemName.textContent = item.name;
+      itemName.href = 'item.html#' + encodeURIComponent(item.name);
+
+      var itemCount = document.createElement('p');
+      itemCount.textContent = 'Count: ' + item.count;
+
+      // Add an edit button
+      var editButton = document.createElement('button');
+      editButton.textContent = 'Edit';
+      editButton.addEventListener('click', function() {
+        // Prompt the user to update the item count
+        var newCount = prompt('Enter the new count for ' + item.name);
+        if (newCount !== null && !isNaN(newCount)) {
+          // Update the item count in the database
+          db.ref('items/' + itemId + '/count').set(parseInt(newCount))
+            .then(function() {
+              console.log('Item count updated successfully');
+            })
+            .catch(function(error) {
+              console.error('Error updating item count:', error);
+            });
+        }
       });
 
-      // Update the total count
-      totalElement.textContent = snapshot.numChildren();
-    } catch (e) {
-      console.error(e);
-    }
-  });
-}
+      // Add a delete button
+      var deleteButton = document.createElement('button');
+      deleteButton.textContent = 'Delete';
+      deleteButton.addEventListener('click', function() {
+        // Confirm deletion with the user
+        var confirmDelete = confirm('Are you sure you want to delete ' + item.name + '?');
+        if (confirmDelete) {
+          // Remove the item from the database
+          db.ref('items/' + itemId).remove()
+            .then(function() {
+              console.log('Item deleted successfully');
+            })
+            .catch(function(error) {
+              console.error('Error deleting item:', error);
+            });
+        }
+      });
+
+      itemCard.appendChild(itemName);
+      itemCard.appendChild(itemCount);
+      itemCard.appendChild(editButton);
+      itemCard.appendChild(deleteButton);
+      itemListElement.appendChild(itemCard);
+    });
+
+    // Update the total count
+    totalElement.textContent = snapshot.numChildren();
+  } catch (e) {
+    console.error(e);
+  }
+});
 
 function addItem() {
   var itemNameInput = document.getElementById('item-name');
