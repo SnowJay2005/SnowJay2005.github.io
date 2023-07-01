@@ -1,10 +1,10 @@
 // Display the list of items on the index.html page
 function displayItemList() {
-  db.collection('items').onSnapshot((snapshot) => {
+  db.ref('items').on('value', (snapshot) => {
     itemListElement.innerHTML = '';
 
-    snapshot.forEach((doc) => {
-      var item = doc.data();
+    snapshot.forEach((childSnapshot) => {
+      var item = childSnapshot.val();
 
       var itemCard = document.createElement('div');
       itemCard.classList.add('item-card');
@@ -22,9 +22,7 @@ function displayItemList() {
     });
 
     // Update the total count
-    totalElement.textContent = snapshot.docs.reduce(function (acc, doc) {
-      return acc + doc.data().count;
-    }, 0);
+    totalElement.textContent = snapshot.numChildren();
   });
 }
 
@@ -56,15 +54,17 @@ function loadItemContent() {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
-  db.collection('items')
-    .where('name', '==', itemName)
-    .get()
-    .then((querySnapshot) => {
-      if (querySnapshot.size === 0) {
+  db.ref('items')
+    .orderByChild('name')
+    .equalTo(itemName)
+    .limitToFirst(1)
+    .once('value')
+    .then((snapshot) => {
+      if (!snapshot.exists()) {
         // Handle invalid or non-existing item names
         console.log('Item not found: ' + itemName);
       } else {
-        var item = querySnapshot.docs[0].data();
+        var item = Object.values(snapshot.val())[0];
         updateItemPage(item);
       }
     })

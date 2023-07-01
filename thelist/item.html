@@ -8,21 +8,23 @@
 <body>
   <header>
     <h1>Your Website Title</h1>
+    <h2>Total: <span id="total">0</span></h2>
   </header>
 
-  <main id="item-content">
-    <h2 id="item-name">Item Name</h2>
-    <p id="item-count">Count: </p>
-    <img id="item-image" src="path/to/item-image.jpg" alt="Item Name Image">
-    <p id="item-description">Additional description or information about the item.</p>
-  </main>
-  
+  <section id="item-list">
+    <!-- List of items will be dynamically generated here -->
+  </section>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.2/firebase-database.js"></script>
+  <script src="firebase.js"></script>
   <script src="script.js"></script>
   <script>
-    // Load the item content based on the URL hash
-    window.addEventListener('DOMContentLoaded', function() {
-      loadItemContent();
-    });
+    // Update the total count
+    var totalElement = document.getElementById('total');
+    totalElement.textContent = itemList.reduce(function (acc, item) {
+      return acc + item.count;
+    }, 0);
   </script>
 </body>
 </html>
