@@ -16,40 +16,49 @@ var itemListElement = document.getElementById('item-list');
 var totalElement = document.getElementById('total');
 
 // Function to display the item list
-function displayItemList(items) {
-  itemListElement.innerHTML = '';
+function displayItemList() {
+  db.ref('items').on('value', function (snapshot) {
+    itemListElement.innerHTML = '';
 
-  items.forEach(function(item) {
-    var itemCard = document.createElement('div');
-    itemCard.classList.add('item-card');
+    try {
+      snapshot.forEach(function (childSnapshot) {
+        var item = childSnapshot.val();
+        var itemKey = childSnapshot.key; // Retrieve the key of the item
 
-    var itemName = document.createElement('a');
-    itemName.textContent = item.name;
-    itemName.href = 'item.html#' + encodeURIComponent(item.name);
+        var itemCard = document.createElement('div');
+        itemCard.classList.add('item-card');
 
-    var itemCount = document.createElement('p');
-    itemCount.textContent = 'Count: ' + item.count;
+        var itemName = document.createElement('a');
+        itemName.textContent = item.name;
+        itemName.href = 'item.html#' + encodeURIComponent(item.name);
 
-    var editButton = document.createElement('button');
-    editButton.textContent = 'Edit';
-    editButton.addEventListener('click', function() {
-      editItem(item);
-    });
+        var itemCount = document.createElement('p');
+        itemCount.textContent = 'Count: ' + item.count;
 
-    var deleteButton = document.createElement('button');
-    deleteButton.textContent = 'Delete';
-    deleteButton.addEventListener('click', function() {
-      deleteItem(item);
-    });
+        var editButton = document.createElement('button');
+        editButton.textContent = 'Edit';
+        editButton.addEventListener('click', function () {
+          editItem(itemKey, item); // Pass the key and item to the edit function
+        });
 
-    itemCard.appendChild(itemName);
-    itemCard.appendChild(itemCount);
-    itemCard.appendChild(editButton);
-    itemCard.appendChild(deleteButton);
-    itemListElement.appendChild(itemCard);
+        var deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Delete';
+        deleteButton.addEventListener('click', function () {
+          deleteItem(itemKey); // Pass the key to the delete function
+        });
+
+        itemCard.appendChild(itemName);
+        itemCard.appendChild(itemCount);
+        itemCard.appendChild(editButton);
+        itemCard.appendChild(deleteButton);
+        itemListElement.appendChild(itemCard);
+      });
+
+      totalElement.textContent = snapshot.numChildren();
+    } catch (e) {
+      console.error(e);
+    }
   });
-
-  totalElement.textContent = items.length;
 }
 
 // Add an event listener for the form submission
@@ -132,7 +141,7 @@ db.ref('items').once('value', function(snapshot) {
 });
 
 // Function to handle editing an item
-function editItem(item) {
+function editItem(key, item) {
   var newName = prompt('Enter a new name:', item.name);
   var newCount = parseInt(prompt('Enter a new count:', item.count), 10);
   var newImage = prompt('Enter a new image URL:', item.image);
@@ -140,20 +149,19 @@ function editItem(item) {
 
   if (newName && !isNaN(newCount) && newImage && newDescription) {
     var updates = {};
-    updates['items/' + item.key + '/name'] = newName;
-    updates['items/' + item.key + '/count'] = newCount;
-    updates['items/' + item.key + '/image'] = newImage;
-    updates['items/' + item.key + '/description'] = newDescription;
+    updates['items/' + key + '/name'] = newName;
+    updates['items/' + key + '/count'] = newCount;
+    updates['items/' + key + '/image'] = newImage;
+    updates['items/' + key + '/description'] = newDescription;
 
-    // Update the item in the database
     db.ref().update(updates);
   }
 }
 
+
 // Function to handle deleting an item
-function deleteItem(item) {
+function deleteItem(key) {
   if (confirm('Are you sure you want to delete this item?')) {
-    // Remove the item from the database
-    db.ref('items/' + item.key).remove();
+    db.ref('items/' + key).remove();
   }
 }
