@@ -5,6 +5,12 @@ var itemList = [
     image: 'path/to/realistic-sans-image.jpg',
     description: 'Description of Realistic Sans'
   },
+  { 
+    name: 'Barbarian',
+    count: 18,
+    image: 'path/to/barbarian-image.jpg',
+    description: 'Description of Barbarian'
+  }
   // Add other items here
 ];
 
