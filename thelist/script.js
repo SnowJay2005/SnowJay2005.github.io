@@ -77,9 +77,11 @@ function loadItemContent() {
 }
 
 // Call the displayItemList function to populate the item list on the index.html page
-displayItemList();
+document.addEventListener('DOMContentLoaded', function() {
+  displayItemList();
 
-// Check if the page is an item page and load the item content if necessary
-if (window.location.pathname.includes('/thelist/item.html')) {
-  loadItemContent();
-}
+  // Check if the page is an item page and load the item content if necessary
+  if (window.location.pathname.includes('/thelist/item.html')) {
+    loadItemContent();
+  }
+});
