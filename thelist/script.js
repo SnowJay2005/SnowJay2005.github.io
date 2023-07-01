@@ -30,7 +30,6 @@ function displayItemList(items) {
     var itemCount = document.createElement('p');
     itemCount.textContent = 'Count: ' + item.count;
 
-    // Create the edit button
     var editButton = document.createElement('button');
     editButton.textContent = 'Edit';
     editButton.addEventListener('click', function() {
@@ -38,7 +37,6 @@ function displayItemList(items) {
       console.log('Edit item:', item);
     });
 
-    // Create the delete button
     var deleteButton = document.createElement('button');
     deleteButton.textContent = 'Delete';
     deleteButton.addEventListener('click', function() {
@@ -122,4 +120,16 @@ window.addEventListener('DOMContentLoaded', function() {
     .catch(function(error) {
       console.log('Error getting item:', error);
     });
+});
+
+// Call the displayItemList function to populate the item list on the index.html page
+db.ref('items').once('value', function(snapshot) {
+  var items = [];
+
+  snapshot.forEach(function(childSnapshot) {
+    var item = childSnapshot.val();
+    items.push(item);
+  });
+
+  displayItemList(items);
 });
