@@ -144,7 +144,7 @@ db.ref('items').once('value', function(snapshot) {
   displayItemList(items);
 });
 
-// Function to handle editing an item
+// Function to handle editing an item version
 function editItem(itemName, versionKey, version) {
   var newCount = parseInt(prompt('Enter a new count:', version.count), 10);
   var newImage = prompt('Enter a new image URL:', version.image);
@@ -156,7 +156,13 @@ function editItem(itemName, versionKey, version) {
     updates['items/' + itemName + '/' + versionKey + '/image'] = newImage;
     updates['items/' + itemName + '/' + versionKey + '/description'] = newDescription;
 
-    db.ref().update(updates);
+    db.ref().update(updates)
+      .then(function() {
+        console.log('Item version updated successfully');
+      })
+      .catch(function(error) {
+        console.error('Error updating item version:', error);
+      });
   }
 }
 
