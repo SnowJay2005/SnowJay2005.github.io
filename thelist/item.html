@@ -26,7 +26,7 @@
     var itemName = decodeURIComponent(itemHash);
 
     // Initialize Firebase
-    var firebaseConfig = {
+        var firebaseConfig = {
       apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
       authDomain: "the-list-175d3.firebaseapp.com",
       databaseURL: "https://the-list-175d3-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -35,7 +35,7 @@
       messagingSenderId: "133562798111",
       appId: "1:133562798111:web:34a18cd64c6202314cc52a"
     };
-    
+
     firebase.initializeApp(firebaseConfig);
 
     // Retrieve the item from Firebase
@@ -51,9 +51,8 @@
           console.log('Item not found: ' + itemName);
           document.getElementById('item-details').innerHTML = '<p>Item not found</p>';
         } else {
-          var item = snapshot.val();
-          var itemKey = Object.keys(item)[0];
-          var itemData = item[itemKey];
+          var itemKey = Object.keys(snapshot.val())[0];
+          var itemData = snapshot.val()[itemKey];
 
           // Generate the HTML for the item details
           var itemDetailsHTML = `
