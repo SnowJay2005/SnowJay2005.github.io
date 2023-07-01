@@ -1,22 +1,15 @@
+// Create an object to hold the item data
+var Item = function(name, count, image, description) {
+  this.name = name;
+  this.count = count;
+  this.image = image;
+  this.description = description;
+};
+
+// Define the itemList array with item objects
 var itemList = [
-  {
-    name: 'Realistic Sans',
-    count: 25,
-    image: 'path/to/realistic-sans-image.jpg',
-    description: 'Description of Realistic Sans'
-  },
-  { 
-    name: 'Barbarian',
-    count: 18,
-    image: 'path/to/barbarian-image.jpg',
-    description: 'Description of Barbarian'
-  },
-  { 
-    name: 'PvZ Zombie',
-    count: 5,
-    image: 'path/to/pvzzombie-image.jpg',
-    description: 'Description of PvZ Zombie'
-  },
+  new Item('Realistic Sans', 25, 'path/to/realistic-sans-image.jpg', 'Description of Realistic Sans'),
+  new Item('Barbarian', 18, 'path/to/barbarian-image.jpg', 'Description of Barbarian')
   // Add other items here
 ];
 
@@ -64,7 +57,11 @@ function displayItemList() {
     itemName.textContent = item.name;
     itemName.href = 'item.html#' + encodeURIComponent(item.name);
 
+    var itemCount = document.createElement('p');
+    itemCount.textContent = 'Count: ' + item.count;
+
     itemCard.appendChild(itemName);
+    itemCard.appendChild(itemCount);
     itemListElement.appendChild(itemCard);
   }
 }
