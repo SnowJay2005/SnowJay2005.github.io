@@ -1,5 +1,5 @@
 var itemList = [
-  { 
+  {
     name: 'Realistic Sans',
     count: 25,
     image: 'path/to/realistic-sans-image.jpg',
@@ -44,6 +44,28 @@ function updateItemPage(item) {
   var itemDescriptionElement = document.getElementById('item-description');
 
   itemNameElement.textContent = item.name;
-  itemImageElement.src = item.image; // Replace with the actual property name for the image URL
-  itemDescriptionElement.textContent = item.description; // Replace with the actual property name for the description
+  itemImageElement.src = item.image;
+  itemDescriptionElement.textContent = item.description;
 }
+
+// Display the list of items
+function displayItemList() {
+  var itemListElement = document.getElementById('item-list');
+  itemListElement.innerHTML = '';
+
+  for (var i = 0; i < itemList.length; i++) {
+    var item = itemList[i];
+    var itemCard = document.createElement('div');
+    itemCard.classList.add('item-card');
+
+    var itemName = document.createElement('a');
+    itemName.textContent = item.name;
+    itemName.href = 'item.html#' + encodeURIComponent(item.name);
+
+    itemCard.appendChild(itemName);
+    itemListElement.appendChild(itemCard);
+  }
+}
+
+// Call the displayItemList function to populate the item list on the index.html page
+displayItemList();
