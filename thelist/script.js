@@ -75,10 +75,12 @@ function loadItemContent() {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
-  var itemsRef = db.ref('items');
-  var query = itemsRef.orderByChild('name').equalTo(itemName).limitToFirst(1);
-
-  query.once('value')
+  const itemsRef = db.ref('items');
+  itemsRef
+    .orderByChild('name')
+    .equalTo(itemName)
+    .limitToFirst(1)
+    .once('value')
     .then((snapshot) => {
       if (!snapshot.exists()) {
         // Handle invalid or non-existing item names
@@ -92,6 +94,7 @@ function loadItemContent() {
       console.log('Error getting item:', error);
     });
 }
+
 
 // Call the displayItemList function to populate the item list on the index.html page
 displayItemList();
