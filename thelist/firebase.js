@@ -1,3 +1,5 @@
+import { initializeApp } from "firebase/app";
+
 // Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
@@ -10,7 +12,7 @@ const firebaseConfig = {
   };
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
 // Get a reference to the Firestore database service
 var db = firebase.firestore();
