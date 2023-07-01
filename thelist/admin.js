@@ -77,23 +77,25 @@ newItemForm.addEventListener('submit', function(event) {
   var itemImage = document.getElementById('item-image').value;
   var itemDescription = document.getElementById('item-description').value;
 
-// Create a new item object
-var newItem = {
-  count: itemCount,
-  image: itemImage,
-  description: itemDescription
-};
+  // Create a new item object
+  // Create a new item object
+  var newItem = {
+    count: itemCount,
+    image: itemImage,
+    description: itemDescription
+  };
 
-// Save the new item to Firebase
-var itemRef = db.ref('items').child(itemName); // Reference the item by name
-itemRef.child(itemVersion).set(newItem)
-  .then(function() {
-    console.log('New item added successfully');
-    newItemForm.reset(); // Reset the form fields
-  })
-  .catch(function(error) {
-    console.error('Error adding new item:', error);
-  });
+  // Save the new item to Firebase
+  var itemRef = db.ref('items').child(itemName); // Reference the item by name
+  itemRef.child(itemVersion).set(newItem)
+    .then(function() {
+      console.log('New item added successfully');
+      newItemForm.reset(); // Reset the form fields
+    })
+    .catch(function(error) {
+      console.error('Error adding new item:', error);
+    });
+});
 
 // Listen for changes in the items data and update the item list
 db.ref('items').on('value', function(snapshot) {
