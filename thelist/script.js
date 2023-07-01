@@ -1,6 +1,30 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
+  authDomain: "the-list-175d3.firebaseapp.com",
+  databaseURL: "https://the-list-175d3-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "the-list-175d3",
+  storageBucket: "the-list-175d3.appspot.com",
+  messagingSenderId: "133562798111",
+  appId: "1:133562798111:web:34a18cd64c6202314cc52a"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
 // Display the list of items on the index.html page
 function displayItemList() {
-  db.ref('items').on('value', (snapshot) => {
+  const itemListElement = document.getElementById('item-list');
+  const totalElement = document.getElementById('total-count');
+
+  // Use db reference to query the database
+  const itemsRef = db.ref('items');
+  itemsRef.on('value', (snapshot) => {
     itemListElement.innerHTML = '';
 
     snapshot.forEach((childSnapshot) => {
@@ -54,7 +78,8 @@ function loadItemContent() {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
-  db.ref('items')
+  const itemsRef = db.ref('items');
+  itemsRef
     .orderByChild('name')
     .equalTo(itemName)
     .limitToFirst(1)
@@ -72,25 +97,6 @@ function loadItemContent() {
       console.log('Error getting item:', error);
     });
 }
-
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getDatabase } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
-    authDomain: "the-list-175d3.firebaseapp.com",
-    databaseURL: "https://the-list-175d3-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "the-list-175d3",
-    storageBucket: "the-list-175d3.appspot.com",
-    messagingSenderId: "133562798111",
-    appId: "1:133562798111:web:34a18cd64c6202314cc52a"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
 
 // Call the displayItemList function to populate the item list on the index.html page
 displayItemList();
