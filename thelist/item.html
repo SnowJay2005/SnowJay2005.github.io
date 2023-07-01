@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Item Name - Your Website Title</title>
+  <title>Your Website Title</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -16,38 +16,27 @@
     <img id="item-image" src="path/to/item-image.jpg" alt="Item Name Image">
     <p id="item-description">Additional description or information about the item.</p>
   </main>
+  
 
+  <script src="script.js"></script>
   <script>
-    // Retrieve the item name from the URL fragment
-    var itemName = decodeURIComponent(window.location.hash.substring(1));
-    var item = findItemByName(itemName);
-
-    if (item) {
-      updateItemPage(item);
-    }
-
-    // Find an item in the itemList array by its name
-    function findItemByName(name) {
-      for (var i = 0; i < itemList.length; i++) {
-        if (itemList[i].name === name) {
-          return itemList[i];
-        }
-      }
-      return null;
-    }
-
     // Update the item page with the content of the selected item
-    function updateItemPage(item) {
-      var itemNameElement = document.getElementById('item-name');
-      var itemCountElement = document.getElementById('item-count');
-      var itemImageElement = document.getElementById('item-image');
-      var itemDescriptionElement = document.getElementById('item-description');
+    function updateItemPage() {
+      var itemName = decodeURIComponent(window.location.hash.substring(1));
+      var item = findItemByName(itemName);
 
-      itemNameElement.textContent = item.name;
-      itemCountElement.textContent = 'Count: ' + item.count;
-      itemImageElement.src = item.image;
-      itemDescriptionElement.textContent = item.description;
+      if (item) {
+        var itemNameElement = document.getElementById('item-name');
+        var itemImageElement = document.getElementById('item-image');
+        var itemDescriptionElement = document.getElementById('item-description');
+
+        itemNameElement.textContent = item.name;
+        itemImageElement.src = item.image;
+        itemDescriptionElement.textContent = item.description;
+      }
     }
+
+    updateItemPage();
   </script>
 </body>
 </html>
