@@ -25,37 +25,43 @@ function displayItemList() {
         var item = childSnapshot.val();
         var itemKey = childSnapshot.key; // Retrieve the key of the item
 
-        var itemCard = document.createElement('div');
-        itemCard.classList.add('item-card');
+        for (var versionKey in item) {
+          if (versionKey !== 'name') {
+            var version = item[versionKey];
 
-        var itemName = document.createElement('a');
-        itemName.textContent = item.name;
-        itemName.href = 'item.html#' + encodeURIComponent(item.name);
+            var itemCard = document.createElement('div');
+            itemCard.classList.add('item-card');
 
-        var itemVersion = document.createElement('a');
-        itemVersion.textContent = item.version;
+            var itemName = document.createElement('a');
+            itemName.textContent = item.name;
+            itemName.href = 'item.html#' + encodeURIComponent(item.name);
 
-        var itemCount = document.createElement('p');
-        itemCount.textContent = 'Count: ' + item.count;
+            var itemVersion = document.createElement('a');
+            itemVersion.textContent = versionKey;
 
-        var editButton = document.createElement('button');
-        editButton.textContent = 'Edit';
-        editButton.addEventListener('click', function () {
-          editItem(itemKey, item); // Pass the key and item to the edit function
-        });
+            var itemCount = document.createElement('p');
+            itemCount.textContent = 'Count: ' + version.count;
 
-        var deleteButton = document.createElement('button');
-        deleteButton.textContent = 'Delete';
-        deleteButton.addEventListener('click', function () {
-          deleteItem(itemKey); // Pass the key to the delete function
-        });
+            var editButton = document.createElement('button');
+            editButton.textContent = 'Edit';
+            editButton.addEventListener('click', function () {
+              editItem(itemKey, versionKey, version); // Pass the key, version key, and version to the edit function
+            });
 
-        itemCard.appendChild(itemName);
-        itemCard.appendChild(itemVersion);
-        itemCard.appendChild(itemCount);
-        itemCard.appendChild(editButton);
-        itemCard.appendChild(deleteButton);
-        itemListElement.appendChild(itemCard);
+            var deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Delete';
+            deleteButton.addEventListener('click', function () {
+              deleteItem(itemKey, versionKey); // Pass the key and version key to the delete function
+            });
+
+            itemCard.appendChild(itemName);
+            itemCard.appendChild(itemVersion);
+            itemCard.appendChild(itemCount);
+            itemCard.appendChild(editButton);
+            itemCard.appendChild(deleteButton);
+            itemListElement.appendChild(itemCard);
+          }
+        }
       });
 
       totalElement.textContent = snapshot.numChildren();
@@ -146,20 +152,18 @@ db.ref('items').once('value', function(snapshot) {
 });
 
 // Function to handle editing an item
-function editItem(key, item) {
-  var newName = prompt('Enter a new name:', item.name);
-  var newVersion = prompt('Enter a new version:', item.version);
-  var newCount = parseInt(prompt('Enter a new count:', item.count), 10);
-  var newImage = prompt('Enter a new image URL:', item.image);
-  var newDescription = prompt('Enter a new description:', item.description);
+function editItem(key, versionKey, version) {
+  var newName = prompt('Enter a new name:', version.name);
+  var newCount = parseInt(prompt('Enter a new count:', version.count), 10);
+  var newImage = prompt('Enter a new image URL:', version.image);
+  var newDescription = prompt('Enter a new description:', version.description);
 
   if (newName && !isNaN(newCount) && newImage && newDescription) {
     var updates = {};
-    updates['items/' + key + '/name'] = newName;
-    updates['items/' + key + '/version'] = newVersion;
-    updates['items/' + key + '/count'] = newCount;
-    updates['items/' + key + '/image'] = newImage;
-    updates['items/' + key + '/description'] = newDescription;
+    updates['items/' + key + '/' + versionKey + '/name'] = newName;
+    updates['items/' + key + '/' + versionKey + '/count'] = newCount;
+    updates['items/' + key + '/' + versionKey + '/image'] = newImage;
+    updates['items/' + key + '/' + versionKey + '/description'] = newDescription;
 
     db.ref().update(updates);
   }
@@ -167,8 +171,8 @@ function editItem(key, item) {
 
 
 // Function to handle deleting an item
-function deleteItem(key) {
-  if (confirm('Are you sure you want to delete this item?')) {
-    db.ref('items/' + key).remove();
+function deleteItem(key, versionKey) {
+  if (confirm('Are you sure you want to delete this item version?')) {
+    db.ref('items/' + key + '/' + versionKey).remove();
   }
 }
