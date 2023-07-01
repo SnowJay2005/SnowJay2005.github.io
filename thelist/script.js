@@ -15,33 +15,37 @@ var db = firebase.database();
 var itemListElement = document.getElementById('item-list');
 var totalElement = document.getElementById('total');
 
-// Display the list of items on the index.html page
 function displayItemList() {
   db.ref('items').on('value', function(snapshot) {
     itemListElement.innerHTML = '';
 
-    snapshot.forEach(function(childSnapshot) {
-      var item = childSnapshot.val();
+    try {
+      snapshot.forEach(function(childSnapshot) {
+        var item = childSnapshot.val();
 
-      var itemCard = document.createElement('div');
-      itemCard.classList.add('item-card');
+        var itemCard = document.createElement('div');
+        itemCard.classList.add('item-card');
 
-      var itemName = document.createElement('a');
-      itemName.textContent = item.name;
-      itemName.href = 'item.html#' + encodeURIComponent(item.name);
+        var itemName = document.createElement('a');
+        itemName.textContent = item.name;
+        itemName.href = 'item.html#' + encodeURIComponent(item.name);
 
-      var itemCount = document.createElement('p');
-      itemCount.textContent = 'Count: ' + item.count;
+        var itemCount = document.createElement('p');
+        itemCount.textContent = 'Count: ' + item.count;
 
-      itemCard.appendChild(itemName);
-      itemCard.appendChild(itemCount);
-      itemListElement.appendChild(itemCard);
-    });
+        itemCard.appendChild(itemName);
+        itemCard.appendChild(itemCount);
+        itemListElement.appendChild(itemCard);
+      });
 
-    // Update the total count
-    totalElement.textContent = snapshot.numChildren();
+      // Update the total count
+      totalElement.textContent = snapshot.numChildren();
+    } catch (e) {
+      console.error(e);
+    }
   });
 }
+
 
 // Find an item in the itemList array by its name
 function findItemByName(name) {
