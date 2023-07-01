@@ -40,5 +40,19 @@
 
   <!-- Your script -->
   <script src="script.js"></script>
+  <script>
+    // Update the total count
+    var totalElement = document.getElementById('total');
+    totalElement.textContent = itemList.reduce(function (acc, item) {
+      return acc + item.count;
+    }, 0);
+
+    // Add event listener to the form submission
+    var newItemForm = document.getElementById('new-item-form');
+    newItemForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      addItem();
+    });
+  </script>
 </body>
 </html>

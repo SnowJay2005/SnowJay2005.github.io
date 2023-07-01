@@ -46,29 +46,37 @@ function displayItemList() {
   });
 }
 
+function addItem() {
+  var itemNameInput = document.getElementById('item-name');
+  var itemCountInput = document.getElementById('item-count');
+  var itemImageInput = document.getElementById('item-image');
+  var itemDescriptionInput = document.getElementById('item-description');
+
+  var newItem = {
+    name: itemNameInput.value,
+    count: parseInt(itemCountInput.value),
+    image: itemImageInput.value,
+    description: itemDescriptionInput.value
+  };
+
+  db.ref('items')
+    .push(newItem)
+    .then(function() {
+      console.log('Item added successfully');
+      itemNameInput.value = '';
+      itemCountInput.value = '';
+      itemImageInput.value = '';
+      itemDescriptionInput.value = '';
+    })
+    .catch(function(error) {
+      console.log('Error adding item:', error);
+    });
+}
+
 // Call the displayItemList function to populate the item list on the index.html page
 displayItemList();
 
 // Load the item content based on the URL hash
 window.addEventListener('DOMContentLoaded', function() {
-  var itemHash = window.location.hash.substr(1);
-  var itemName = decodeURIComponent(itemHash);
-
-  db.ref('items')
-    .orderByChild('name')
-    .equalTo(itemName)
-    .limitToFirst(1)
-    .once('value')
-    .then(function(snapshot) {
-      if (!snapshot.exists()) {
-        // Handle invalid or non-existing item names
-        console.log('Item not found: ' + itemName);
-      } else {
-        var item = Object.values(snapshot.val())[0];
-        updateItemPage(item);
-      }
-    })
-    .catch(function(error) {
-      console.log('Error getting item:', error);
-    });
+  loadItemContent();
 });
