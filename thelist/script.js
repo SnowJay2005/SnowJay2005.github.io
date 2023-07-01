@@ -139,13 +139,14 @@ function editItem(item) {
   var newDescription = prompt('Enter a new description:', item.description);
 
   if (newName && !isNaN(newCount) && newImage && newDescription) {
-    item.name = newName;
-    item.count = newCount;
-    item.image = newImage;
-    item.description = newDescription;
+    var updates = {};
+    updates['items/' + item.key + '/name'] = newName;
+    updates['items/' + item.key + '/count'] = newCount;
+    updates['items/' + item.key + '/image'] = newImage;
+    updates['items/' + item.key + '/description'] = newDescription;
 
     // Update the item in the database
-    db.ref('items/' + item.key).update(item);
+    db.ref().update(updates);
   }
 }
 
