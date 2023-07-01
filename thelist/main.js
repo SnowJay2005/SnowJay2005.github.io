@@ -19,40 +19,52 @@ var totalElement = document.getElementById('total');
 function displayItemList() {
   db.ref('items').on('value', function (snapshot) {
     itemListElement.innerHTML = '';
-    var totalCount = 0;
 
     try {
+      var totalItemCount = 0;
+
       snapshot.forEach(function (childSnapshot) {
-        var itemKey = childSnapshot.key; // Retrieve the key of the item
         var item = childSnapshot.val();
-        var versions = item.versions || {}; // Get the versions of the item
-        var itemCount = 0; // Initialize count for the item
+        var itemKey = childSnapshot.key; // Retrieve the key of the item
 
         var itemCard = document.createElement('div');
         itemCard.classList.add('item-card');
 
         var itemName = document.createElement('a');
         itemName.textContent = item.name;
-        itemName.href = 'versions.html#' + encodeURIComponent(itemKey); // Link to the versions page
+        itemName.href = 'item.html#' + encodeURIComponent(itemKey);
 
-        for (var versionKey in versions) {
-          if (versions.hasOwnProperty(versionKey)) {
-            itemCount += versions[versionKey].count || 0; // Add version count to item count
+        var itemCount = document.createElement('p');
+        var count = 0;
+        for (var version in item) {
+          if (version !== 'name') {
+            count += item[version].count;
           }
         }
+        itemCount.textContent = 'Count: ' + count;
 
-        var itemCountElement = document.createElement('p');
-        itemCountElement.textContent = item.name + ' count: ' + itemCount;
+        totalItemCount += count;
 
-        totalCount += itemCount; // Add to the total count
+        var editButton = document.createElement('button');
+        editButton.textContent = 'Edit';
+        editButton.addEventListener('click', function () {
+          editItem(itemKey, item); // Pass the key and item to the edit function
+        });
+
+        var deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Delete';
+        deleteButton.addEventListener('click', function () {
+          deleteItem(itemKey); // Pass the key to the delete function
+        });
 
         itemCard.appendChild(itemName);
-        itemCard.appendChild(itemCountElement);
+        itemCard.appendChild(itemCount);
+        itemCard.appendChild(editButton);
+        itemCard.appendChild(deleteButton);
         itemListElement.appendChild(itemCard);
       });
 
-      totalElement.textContent = 'Total Items: ' + snapshot.numChildren();
-      totalItemCountElement.textContent = 'Total Count: ' + totalCount;
+      totalItemCountElement.textContent = 'Total Count: ' + totalItemCount;
     } catch (e) {
       console.error(e);
     }
