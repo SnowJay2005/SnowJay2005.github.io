@@ -16,5 +16,12 @@
   </section>
 
   <script src="script.js"></script>
+  <script>
+    // Update the total count
+    var totalElement = document.getElementById('total');
+    totalElement.textContent = itemList.reduce(function (acc, item) {
+      return acc + item.count;
+    }, 0);
+  </script>
 </body>
 </html>

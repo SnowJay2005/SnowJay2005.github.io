@@ -56,6 +56,7 @@ function displayItemList() {
 
   for (var i = 0; i < itemList.length; i++) {
     var item = itemList[i];
+
     var itemCard = document.createElement('div');
     itemCard.classList.add('item-card');
 
