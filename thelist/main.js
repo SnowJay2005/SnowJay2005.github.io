@@ -17,54 +17,47 @@ var totalElement = document.getElementById('total');
 
 // Function to display the item list
 function displayItemList() {
-  db.ref('items').on('value', function (snapshot) {
+  db.ref('items').on('value', function(snapshot) {
     itemListElement.innerHTML = '';
 
     try {
-      var totalItemCount = 0;
+      snapshot.forEach(function(childSnapshot) {
+        var itemName = childSnapshot.key; // Retrieve the item name
+        var itemVersions = childSnapshot.val();
 
-      snapshot.forEach(function (childSnapshot) {
-        var item = childSnapshot.val();
-        var itemKey = childSnapshot.key; // Retrieve the key of the item
+        var totalItemCount = 0;
 
-        var itemCard = document.createElement('div');
-        itemCard.classList.add('item-card');
+        // Iterate over each version of the item
+        for (var versionKey in itemVersions) {
+          if (itemVersions.hasOwnProperty(versionKey)) {
+            var item = itemVersions[versionKey];
 
-        var itemName = document.createElement('a');
-        itemName.textContent = item.name;
-        itemName.href = 'item.html#' + encodeURIComponent(itemKey);
+            var itemCard = document.createElement('div');
+            itemCard.classList.add('item-card');
 
-        var itemCount = document.createElement('p');
-        var count = 0;
-        for (var version in item) {
-          if (version !== 'name') {
-            count += item[version].count;
+            var itemNameElement = document.createElement('p');
+            itemNameElement.textContent = itemName;
+
+            var itemVersionElement = document.createElement('p');
+            itemVersionElement.textContent = versionKey;
+
+            var itemCountElement = document.createElement('p');
+            itemCountElement.textContent = 'Count: ' + item.count;
+
+            itemCard.appendChild(itemNameElement);
+            itemCard.appendChild(itemVersionElement);
+            itemCard.appendChild(itemCountElement);
+            itemListElement.appendChild(itemCard);
+
+            totalItemCount += item.count;
           }
         }
-        itemCount.textContent = 'Count: ' + count;
 
-        totalItemCount += count;
-
-        var editButton = document.createElement('button');
-        editButton.textContent = 'Edit';
-        editButton.addEventListener('click', function () {
-          editItem(itemKey, item); // Pass the key and item to the edit function
-        });
-
-        var deleteButton = document.createElement('button');
-        deleteButton.textContent = 'Delete';
-        deleteButton.addEventListener('click', function () {
-          deleteItem(itemKey); // Pass the key to the delete function
-        });
-
-        itemCard.appendChild(itemName);
-        itemCard.appendChild(itemCount);
-        itemCard.appendChild(editButton);
-        itemCard.appendChild(deleteButton);
-        itemListElement.appendChild(itemCard);
+        // Display the total count for the item
+        var totalItemElement = document.createElement('p');
+        totalItemElement.textContent = itemName + ' Total Count: ' + totalItemCount;
+        itemListElement.appendChild(totalItemElement);
       });
-
-      totalItemCountElement.textContent = 'Total Count: ' + totalItemCount;
     } catch (e) {
       console.error(e);
     }
