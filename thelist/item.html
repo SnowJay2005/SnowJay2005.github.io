@@ -25,6 +25,7 @@
     var itemHash = window.location.hash.substr(1);
     var itemName = decodeURIComponent(itemHash);
 
+    // Initialize Firebase
         var firebaseConfig = {
       apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
       authDomain: "the-list-175d3.firebaseapp.com",
@@ -50,22 +51,22 @@
           console.log('Item not found: ' + itemName);
           document.getElementById('item-details').innerHTML = '<p>Item not found</p>';
         } else {
-          var itemData = snapshot.val();
-          var itemKey = Object.keys(itemData)[0];
-          var item = itemData[itemKey];
+          snapshot.forEach(function(childSnapshot) {
+            var item = childSnapshot.val();
 
-          // Generate the HTML for the item details
-          var itemDetailsHTML = `
-            <div class="item-card">
-              <h2>${item.name}</h2>
-              <p>Count: ${item.count}</p>
-              <img src="${item.image}" alt="${item.name}">
-              <p>${item.description}</p>
-            </div>
-          `;
+            // Generate the HTML for the item details
+            var itemDetailsHTML = `
+              <div class="item-card">
+                <h2>${item.name}</h2>
+                <p>Count: ${item.count}</p>
+                <img src="${item.image}" alt="${item.name}">
+                <p>${item.description}</p>
+              </div>
+            `;
 
-          // Update the item details section with the generated HTML
-          document.getElementById('item-details').innerHTML = itemDetailsHTML;
+            // Update the item details section with the generated HTML
+            document.getElementById('item-details').innerHTML = itemDetailsHTML;
+          });
         }
       })
       .catch(function(error) {
