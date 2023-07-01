@@ -1,5 +1,5 @@
 // Your web app's Firebase configuration
-const firebaseConfig = {
+var firebaseConfig = {
   apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
   authDomain: "the-list-175d3.firebaseapp.com",
   databaseURL: "https://the-list-175d3-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -11,16 +11,16 @@ const firebaseConfig = {
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const itemListElement = document.getElementById('item-list');
-const totalElement = document.getElementById('total');
+var db = firebase.database();
+var itemListElement = document.getElementById('item-list');
+var totalElement = document.getElementById('total');
 
 // Display the list of items on the index.html page
 function displayItemList() {
-  db.ref('items').on('value', (snapshot) => {
+  db.ref('items').on('value', function(snapshot) {
     itemListElement.innerHTML = '';
 
-    snapshot.forEach((childSnapshot) => {
+    snapshot.forEach(function(childSnapshot) {
       var item = childSnapshot.val();
 
       var itemCard = document.createElement('div');
@@ -76,7 +76,7 @@ function loadItemContent() {
     .equalTo(itemName)
     .limitToFirst(1)
     .once('value')
-    .then((snapshot) => {
+    .then(function(snapshot) {
       if (!snapshot.exists()) {
         // Handle invalid or non-existing item names
         console.log('Item not found: ' + itemName);
@@ -85,7 +85,7 @@ function loadItemContent() {
         updateItemPage(item);
       }
     })
-    .catch((error) => {
+    .catch(function(error) {
       console.log('Error getting item:', error);
     });
 }
