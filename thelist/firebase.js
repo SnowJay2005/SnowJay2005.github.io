@@ -12,4 +12,5 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
-var db = firebase.firestore();
+// Get a reference to the Realtime Database
+var db = firebase.database();
