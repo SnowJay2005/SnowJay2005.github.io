@@ -2,17 +2,16 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Your Website Title</title>
+  <title>Item Details</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
-    <h1>Your Website Title</h1>
-    <h2>Total: <span id="total">0</span></h2>
+    <h1>Item Details</h1>
   </header>
 
-  <section id="item-list">
-    <!-- List of items will be dynamically generated here -->
+  <section id="item-details">
+    <!-- Item details will be dynamically generated here -->
   </section>
 
   <!-- Firebase SDKs -->
@@ -20,13 +19,59 @@
   <script src="https://www.gstatic.com/firebasejs/8.7.0/firebase-database.js"></script>
 
   <!-- Your script -->
-  <script src="script.js"></script>
+  <script src="main.js"></script>
   <script>
-    // Update the total count
-    var totalElement = document.getElementById('total');
-    totalElement.textContent = itemList.reduce(function (acc, item) {
-      return acc + item.count;
-    }, 0);
+    // Retrieve the item name from the URL hash
+    var itemHash = window.location.hash.substr(1);
+    var itemName = decodeURIComponent(itemHash);
+
+    // Initialize Firebase
+    var firebaseConfig = {
+      apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
+      authDomain: "the-list-175d3.firebaseapp.com",
+      databaseURL: "https://the-list-175d3-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "the-list-175d3",
+      storageBucket: "the-list-175d3.appspot.com",
+      messagingSenderId: "133562798111",
+      appId: "1:133562798111:web:34a18cd64c6202314cc52a"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+
+    // Retrieve the item from Firebase
+    var db = firebase.database();
+    var itemRef = db.ref('items');
+    itemRef.orderByChild('name')
+      .equalTo(itemName)
+      .limitToFirst(1)
+      .once('value')
+      .then(function(snapshot) {
+        if (!snapshot.exists()) {
+          // Handle invalid or non-existing item names
+          console.log('Item not found: ' + itemName);
+          document.getElementById('item-details').innerHTML = '<p>Item not found</p>';
+        } else {
+          var item = snapshot.val();
+          var itemKey = Object.keys(item)[0];
+          var itemData = item[itemKey];
+
+          // Generate the HTML for the item details
+          var itemDetailsHTML = `
+            <div class="item-card">
+              <h2>${itemData.name}</h2>
+              <p>Count: ${itemData.count}</p>
+              <img src="${itemData.image}" alt="${itemData.name}">
+              <p>${itemData.description}</p>
+            </div>
+          `;
+
+          // Update the item details section with the generated HTML
+          document.getElementById('item-details').innerHTML = itemDetailsHTML;
+        }
+      })
+      .catch(function(error) {
+        console.log('Error getting item:', error);
+      });
   </script>
 </body>
 </html>
