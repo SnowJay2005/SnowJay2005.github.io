@@ -1,7 +1,3 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDPKjpimOZLKwNwfm_IQFm8X4Pv2ZgucIA",
@@ -14,14 +10,14 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 const itemListElement = document.getElementById('item-list');
 const totalElement = document.getElementById('total');
 
 // Display the list of items on the index.html page
 function displayItemList() {
-  onValue(ref(db, 'items'), (snapshot) => {
+  db.ref('items').on('value', (snapshot) => {
     itemListElement.innerHTML = '';
 
     snapshot.forEach((childSnapshot) => {
@@ -75,8 +71,7 @@ function loadItemContent() {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
-  const itemsRef = db.ref('items');
-  itemsRef
+  db.ref('items')
     .orderByChild('name')
     .equalTo(itemName)
     .limitToFirst(1)
@@ -94,7 +89,6 @@ function loadItemContent() {
       console.log('Error getting item:', error);
     });
 }
-
 
 // Call the displayItemList function to populate the item list on the index.html page
 displayItemList();
