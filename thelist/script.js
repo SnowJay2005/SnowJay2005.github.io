@@ -52,10 +52,12 @@ function findItemByName(name) {
 // Update the item page with the content of the selected item
 function updateItemPage(item) {
   var itemNameElement = document.getElementById('item-name');
+  var itemCountElement = document.getElementById('item-count');
   var itemImageElement = document.getElementById('item-image');
   var itemDescriptionElement = document.getElementById('item-description');
 
   itemNameElement.textContent = item.name;
+  itemCountElement.textContent = 'Count: ' + item.count;
   itemImageElement.src = item.image;
   itemDescriptionElement.textContent = item.description;
 }
