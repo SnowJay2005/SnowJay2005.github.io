@@ -6,15 +6,58 @@ var Item = function(name, count, image, description) {
   this.description = description;
 };
 
-// Define the itemList array with item objects
-var itemList = getItemListFromLocalStorage() || [
-  new Item('Realistic Sans', 25, 'path/to/realistic-sans-image.jpg', 'Description of Realistic Sans'),
-  new Item('Barbarian', 18, 'path/to/barbarian-image.jpg', 'Description of Barbarian')
-  // Add other items here
-];
+// Global variable to hold the item data
+var itemList = [];
 
-// Get the item list element
-var itemListElement = document.getElementById('item-list');
+// Fetch the item data from the JSON file
+function fetchItemList() {
+  fetch('items.json')
+    .then(function(response) {
+      return response.json();
+    })
+    .then(function(data) {
+      itemList = data;
+      displayItemList();
+    })
+    .catch(function(error) {
+      console.log('Error fetching item data:', error);
+    });
+}
+
+// Save the item data to the JSON file
+function saveItemList() {
+  fetch('https://api.github.com/repos/SnowJay2005/SnowJay2005.github.io/contents/thelist/items.json', {
+    method: 'PUT',
+    headers: {
+      AAuthorization: 'Bearer ' + process.env.THELIST_TOKEN,
+      Accept: 'application/vnd.github.v3+json',
+    },
+    body: JSON.stringify({
+      message: 'Update item data',
+      content: btoa(JSON.stringify(itemList, null, 2)),
+      sha: 'SHA_OF_PREVIOUS_FILE_VERSION',
+    }),
+  })
+    .then(function(response) {
+      if (response.ok) {
+        console.log('Item data saved successfully');
+      } else {
+        throw new Error('Failed to save item data');
+      }
+    })
+    .catch(function(error) {
+      console.log('Error saving item data:', error);
+    });
+}
+
+// Update the item count
+function updateItemCount(itemName, count) {
+  var item = findItemByName(itemName);
+  if (item) {
+    item.count = count;
+    saveItemList();
+  }
+}
 
 // Display the list of items on the index.html page
 function displayItemList() {
@@ -33,18 +76,8 @@ function displayItemList() {
     var itemCount = document.createElement('p');
     itemCount.textContent = 'Count: ' + item.count;
 
-    var editButton = document.createElement('button');
-    editButton.textContent = 'Edit';
-    editButton.addEventListener('click', createEditItemHandler(item));
-
-    var deleteButton = document.createElement('button');
-    deleteButton.textContent = 'Delete';
-    deleteButton.addEventListener('click', createDeleteItemHandler(item));
-
     itemCard.appendChild(itemName);
     itemCard.appendChild(itemCount);
-    itemCard.appendChild(editButton);
-    itemCard.appendChild(deleteButton);
     itemListElement.appendChild(itemCard);
   }
 }
@@ -59,29 +92,17 @@ function findItemByName(name) {
   return null;
 }
 
-// Create a click event handler for editing an item
-function createEditItemHandler(item) {
-  return function () {
-    // Redirect to the edit.html page with the item's details pre-filled
-    window.location.href = 'edit.html#' + encodeURIComponent(item.name);
-  };
-}
+// Update the item page with the content of the selected item
+function updateItemPage(item) {
+  var itemNameElement = document.getElementById('item-name');
+  var itemCountElement = document.getElementById('item-count');
+  var itemImageElement = document.getElementById('item-image');
+  var itemDescriptionElement = document.getElementById('item-description');
 
-// Create a click event handler for deleting an item
-function createDeleteItemHandler(item) {
-  return function () {
-    // Remove the item from the itemList
-    var itemIndex = itemList.indexOf(item);
-    if (itemIndex !== -1) {
-      itemList.splice(itemIndex, 1);
-    }
-
-    // Save the updated itemList to local storage
-    saveItemList();
-
-    // Refresh the item list on the index.html page
-    displayItemList();
-  };
+  itemNameElement.textContent = item.name;
+  itemCountElement.textContent = 'Count: ' + item.count.toString();
+  itemImageElement.src = item.image;
+  itemDescriptionElement.textContent = item.description;
 }
 
 // Load the item content based on the URL hash
@@ -98,21 +119,23 @@ function loadItemContent() {
   }
 }
 
-// Save the itemList array to local storage
-function saveItemList() {
-  localStorage.setItem('itemList', JSON.stringify(itemList));
-}
-
-// Retrieve the itemList array from local storage
-function getItemListFromLocalStorage() {
-  var itemListJSON = localStorage.getItem('itemList');
-  return itemListJSON ? JSON.parse(itemListJSON) : null;
-}
-
-// Call the displayItemList function to populate the item list on the index.html page
-displayItemList();
+// Call the fetchItemList function to populate the item list from the JSON file
+fetchItemList();
 
 // Check if the page is an item page and load the item content if necessary
 if (window.location.pathname.includes('/thelist/item.html')) {
   loadItemContent();
 }
+
+// Get the count update elements
+var itemCountInput = document.getElementById('item-count-input');
+var updateCountBtn = document.getElementById('update-count-btn');
+
+// Event listener for count update button click
+updateCountBtn.addEventListener('click', function() {
+  var count = parseInt(itemCountInput.value, 10);
+  if (!isNaN(count)) {
+    var itemName = decodeURIComponent(window.location.hash.substr(1));
+    updateItemCount(itemName, count);
+  }
+});
