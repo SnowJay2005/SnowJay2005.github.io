@@ -57,7 +57,7 @@ function updateItemPage(item) {
   var itemDescriptionElement = document.getElementById('item-description');
 
   itemNameElement.textContent = item.name;
-  itemCountElement.textContent = 'Count: ' + item.count;
+  itemCountElement.textContent = 'Count: ' + item.count.toString();
   itemImageElement.src = item.image;
   itemDescriptionElement.textContent = item.description;
 }
