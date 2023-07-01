@@ -16,5 +16,8 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
+// Get a reference to the Firestore database service
+var db = firebase.firestore();
+
 // Export the Firebase database object
 export default firebase.database();
