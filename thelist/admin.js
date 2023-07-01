@@ -66,38 +66,36 @@ function displayItemList(items) {
 
 // Add an event listener for the form submission
 var newItemForm = document.getElementById('new-item-form');
-if (newItemForm) {
-  newItemForm.addEventListener('submit', function (event) {
-    event.preventDefault(); // Prevent the form from submitting and refreshing the page
+newItemForm.addEventListener('submit', function (event) {
+  event.preventDefault(); // Prevent the form from submitting and refreshing the page
 
-    // Get the input values
-    var itemName = document.getElementById('item-name').value;
-    var itemCount = parseInt(document.getElementById('item-count').value);
-    var itemVersion = document.getElementById('item-version').value;
-    var itemImage = document.getElementById('item-image').value;
-    var itemDescription = document.getElementById('item-description').value;
+  // Get the input values
+  var itemName = document.getElementById('item-name').value;
+  var itemCount = parseInt(document.getElementById('item-count').value);
+  var itemVersion = document.getElementById('item-version').value;
+  var itemImage = document.getElementById('item-image').value;
+  var itemDescription = document.getElementById('item-description').value;
 
-    // Create a new item object
-    var newItem = {
-      name: itemName,
-      count: itemCount,
-      version: itemVersion,
-      image: itemImage,
-      description: itemDescription
-    };
+  // Create a new item object
+  var newItem = {
+    name: itemName,
+    count: itemCount,
+    version: itemVersion,
+    image: itemImage,
+    description: itemDescription
+  };
 
-    // Save the new item to Firebase
-    var newItemRef = db.ref('items').push();
-    newItemRef.set(newItem)
-      .then(function () {
-        console.log('New item added successfully');
-        newItemForm.reset(); // Reset the form fields
-      })
-      .catch(function (error) {
-        console.error('Error adding new item:', error);
-      });
-  });
-}
+  // Save the new item to Firebase
+  var newItemRef = db.ref('items').push();
+  newItemRef.set(newItem)
+    .then(function () {
+      console.log('New item added successfully');
+      newItemForm.reset(); // Reset the form fields
+    })
+    .catch(function (error) {
+      console.error('Error adding new item:', error);
+    });
+});
 
 // Listen for changes in the items data and update the item list
 db.ref('items').on('value', function (snapshot) {
