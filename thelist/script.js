@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getDatabase } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -16,15 +16,12 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const itemListElement = document.getElementById('item-list');
+const totalElement = document.getElementById('total');
 
 // Display the list of items on the index.html page
 function displayItemList() {
-  const itemListElement = document.getElementById('item-list');
-  const totalElement = document.getElementById('total-count');
-
-  // Use db reference to query the database
-  const itemsRef = db.ref('items');
-  itemsRef.on('value', (snapshot) => {
+  onValue(ref(db, 'items'), (snapshot) => {
     itemListElement.innerHTML = '';
 
     snapshot.forEach((childSnapshot) => {
@@ -78,24 +75,20 @@ function loadItemContent() {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
-  const itemsRef = db.ref('items');
-  itemsRef
-    .orderByChild('name')
-    .equalTo(itemName)
-    .limitToFirst(1)
-    .once('value')
-    .then((snapshot) => {
-      if (!snapshot.exists()) {
-        // Handle invalid or non-existing item names
-        console.log('Item not found: ' + itemName);
-      } else {
-        var item = Object.values(snapshot.val())[0];
-        updateItemPage(item);
-      }
-    })
-    .catch((error) => {
-      console.log('Error getting item:', error);
-    });
+  // Query the database to find the item by name
+  const itemsRef = ref(db, 'items');
+  const query = orderByChild(itemsRef, 'name').equalTo(itemName).limitToFirst(1);
+  onValue(query, (snapshot) => {
+    if (!snapshot.exists()) {
+      // Handle invalid or non-existing item names
+      console.log('Item not found: ' + itemName);
+    } else {
+      var item = Object.values(snapshot.val())[0];
+      updateItemPage(item);
+    }
+  }, (error) => {
+    console.log('Error getting item:', error);
+  });
 }
 
 // Call the displayItemList function to populate the item list on the index.html page
