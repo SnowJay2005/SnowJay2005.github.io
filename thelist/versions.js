@@ -39,17 +39,17 @@ function displayVersions() {
       versionCard.classList.add('item-card');
 
       var versionName = document.createElement('h2');
-      versionName.textContent = 'Version ' + version;
+      versionName.textContent = version;
 
       var versionCount = document.createElement('p');
       versionCount.textContent = 'Count: ' + versionData.count;
 
-      var versionDescription = document.createElement('p');
-      versionDescription.textContent = 'Description: ' + versionData.description;
-
       var versionImage = document.createElement('img');
       versionImage.src = versionData.image;
-      versionImage.alt = 'Version ' + version + ' Image';
+      versionImage.alt = version + ' Image';
+
+      var versionDescription = document.createElement('p');
+      versionDescription.textContent = 'Description: ' + versionData.description;
 
       versionCard.appendChild(versionName);
       versionCard.appendChild(versionCount);
