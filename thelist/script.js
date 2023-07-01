@@ -75,20 +75,22 @@ function loadItemContent() {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
-  // Query the database to find the item by name
-  const itemsRef = ref(db, 'items');
-  const query = itemsRef.orderByChild('name').equalTo(itemName).limitToFirst(1);
-  onValue(query, (snapshot) => {
-    if (!snapshot.exists()) {
-      // Handle invalid or non-existing item names
-      console.log('Item not found: ' + itemName);
-    } else {
-      var item = Object.values(snapshot.val())[0];
-      updateItemPage(item);
-    }
-  }, (error) => {
-    console.log('Error getting item:', error);
-  });
+  var itemsRef = db.ref('items');
+  var query = itemsRef.orderByChild('name').equalTo(itemName).limitToFirst(1);
+
+  query.once('value')
+    .then((snapshot) => {
+      if (!snapshot.exists()) {
+        // Handle invalid or non-existing item names
+        console.log('Item not found: ' + itemName);
+      } else {
+        var item = Object.values(snapshot.val())[0];
+        updateItemPage(item);
+      }
+    })
+    .catch((error) => {
+      console.log('Error getting item:', error);
+    });
 }
 
 // Call the displayItemList function to populate the item list on the index.html page
