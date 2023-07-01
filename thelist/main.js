@@ -23,9 +23,10 @@ function displayItemList() {
 
     try {
       snapshot.forEach(function (childSnapshot) {
-        var item = childSnapshot.val();
         var itemKey = childSnapshot.key; // Retrieve the key of the item
-        var itemCount = item.count || 0; // Get the count of the item
+        var item = childSnapshot.val();
+        var versions = item.versions || {}; // Get the versions of the item
+        var itemCount = 0; // Initialize count for the item
 
         var itemCard = document.createElement('div');
         itemCard.classList.add('item-card');
@@ -34,8 +35,14 @@ function displayItemList() {
         itemName.textContent = item.name;
         itemName.href = 'versions.html#' + encodeURIComponent(itemKey); // Link to the versions page
 
+        for (var versionKey in versions) {
+          if (versions.hasOwnProperty(versionKey)) {
+            itemCount += versions[versionKey].count || 0; // Add version count to item count
+          }
+        }
+
         var itemCountElement = document.createElement('p');
-        itemCountElement.textContent = 'Total Count: ' + itemCount;
+        itemCountElement.textContent = item.name + ' count: ' + itemCount;
 
         totalCount += itemCount; // Add to the total count
 
