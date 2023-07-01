@@ -50,14 +50,19 @@ function findItemByName(name) {
 }
 
 // Update the item page with the content of the selected item
-function updateItemPage(item) {
-  var itemNameElement = document.getElementById('item-name');
-  var itemImageElement = document.getElementById('item-image');
-  var itemDescriptionElement = document.getElementById('item-description');
+function updateItemPage() {
+  var itemName = decodeURIComponent(window.location.hash.substring(1));
+  var item = findItemByName(itemName);
 
-  itemNameElement.textContent = item.name;
-  itemImageElement.src = item.image;
-  itemDescriptionElement.textContent = item.description;
+  if (item) {
+    var itemNameElement = document.getElementById('item-name');
+    var itemImageElement = document.getElementById('item-image');
+    var itemDescriptionElement = document.getElementById('item-description');
+
+    itemNameElement.textContent = item.name;
+    itemImageElement.src = item.image;
+    itemDescriptionElement.textContent = item.description;
+  }
 }
 
 // Display the list of items
