@@ -51,8 +51,7 @@
           console.log('Item not found: ' + itemName);
           document.getElementById('item-details').innerHTML = '<p>Item not found</p>';
         } else {
-          var itemKey = Object.keys(snapshot.val())[0];
-          var itemData = snapshot.val()[itemKey];
+          var itemData = Object.values(snapshot.val())[0];
 
           // Generate the HTML for the item details
           var itemDetailsHTML = `
