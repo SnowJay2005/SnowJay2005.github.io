@@ -1,6 +1,4 @@
-import firebase from "firebase/compat/app";
-import { initializeApp } from "firebase/compat/app";
-import "firebase/compat/firestore";
+import { initializeApp } from "firebase/app";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -15,9 +13,3 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Get a reference to the Firestore database service
-var db = firebase.firestore();
-
-// Export the Firebase database object
-export default app;
