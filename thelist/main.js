@@ -35,10 +35,23 @@ function displayItemList() {
           }
         }
 
+        // Create a container div for the item
+        var itemContainer = document.createElement('div');
+        itemContainer.classList.add('item-container');
+
+        // Display the item name
+        var itemNameElement = document.createElement('p');
+        itemNameElement.classList.add('item-name');
+        itemNameElement.textContent = itemName;
+        itemContainer.appendChild(itemNameElement);
+
         // Display the total count for the item
         var totalItemElement = document.createElement('p');
-        totalItemElement.textContent = itemName + ' Total Count: ' + totalItemCount;
-        itemListElement.appendChild(totalItemElement);
+        totalItemElement.classList.add('item-total');
+        totalItemElement.textContent = 'Total Count: ' + totalItemCount;
+        itemContainer.appendChild(totalItemElement);
+
+        itemListElement.appendChild(itemContainer);
       });
     } catch (e) {
       console.error(e);
