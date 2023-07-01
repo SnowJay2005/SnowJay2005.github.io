@@ -11,6 +11,12 @@ var itemList = [
     image: 'path/to/barbarian-image.jpg',
     description: 'Description of Barbarian'
   },
+  { 
+    name: 'PvZ Zombie',
+    count: 5,
+    image: 'path/to/pvzzombie-image.jpg',
+    description: 'Description of PvZ Zombie'
+  },
   // Add other items here
 ];
 
