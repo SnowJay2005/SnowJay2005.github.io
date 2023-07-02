@@ -21,6 +21,9 @@ function displayItemList() {
     itemListElement.innerHTML = '';
 
     try {
+      var itemList = []; // Initialize an empty array to hold the item data
+      var totalCount = 0; // Initialize the total count
+
       snapshot.forEach(function(childSnapshot) {
         var itemName = childSnapshot.key; // Retrieve the item name
         var itemVersions = childSnapshot.val();
@@ -53,22 +56,17 @@ function displayItemList() {
         itemContainer.appendChild(totalItemElement);
 
         itemListElement.appendChild(itemContainer);
+
+        totalCount += totalItemCount; // Accumulate the total count
       });
+
+      // Update the total count
+      totalElement.textContent = 'Total Count: ' + totalCount;
     } catch (e) {
       console.error(e);
     }
   });
 }
-
-// Update the total count
-var totalElement = document.getElementById('total');
-var totalCount = 0;
-
-itemList.forEach(function (item) {
-  totalCount += item.count;
-});
-
-totalElement.textContent = 'Total Count: ' + totalCount;
 
 // Call the displayItemList function to populate the item list on the main page
 displayItemList();

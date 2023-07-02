@@ -21,6 +21,8 @@ function displayItemList() {
     itemListElement.innerHTML = '';
 
     try {
+      var totalCount = 0; // Initialize the total count
+
       snapshot.forEach(function (childSnapshot) {
         var itemName = childSnapshot.key; // Retrieve the name of the item
 
@@ -55,10 +57,12 @@ function displayItemList() {
           itemCard.appendChild(editButton);
           itemCard.appendChild(deleteButton);
           itemListElement.appendChild(itemCard);
+
+          totalCount += version.count; // Accumulate the total count
         });
       });
 
-      totalElement.textContent = snapshot.numChildren();
+      totalElement.textContent = 'Total Count: ' + totalCount;
     } catch (e) {
       console.error(e);
     }
@@ -67,7 +71,7 @@ function displayItemList() {
 
 // Add an event listener for the form submission
 var newItemForm = document.getElementById('new-item-form');
-newItemForm.addEventListener('submit', function(event) {
+newItemForm.addEventListener('submit', function (event) {
   event.preventDefault(); // Prevent the form from submitting and refreshing the page
 
   // Get the input values
@@ -78,7 +82,6 @@ newItemForm.addEventListener('submit', function(event) {
   var itemDescription = document.getElementById('item-description').value;
 
   // Create a new item object
-  // Create a new item object
   var newItem = {
     count: itemCount,
     image: itemImage,
@@ -88,29 +91,22 @@ newItemForm.addEventListener('submit', function(event) {
   // Save the new item to Firebase
   var itemRef = db.ref('items').child(itemName); // Reference the item by name
   itemRef.child(itemVersion).set(newItem)
-    .then(function() {
+    .then(function () {
       console.log('New item added successfully');
       newItemForm.reset(); // Reset the form fields
     })
-    .catch(function(error) {
+    .catch(function (error) {
       console.error('Error adding new item:', error);
     });
 });
 
 // Listen for changes in the items data and update the item list
-db.ref('items').on('value', function(snapshot) {
-  var items = [];
-
-  snapshot.forEach(function(childSnapshot) {
-    var item = childSnapshot.val();
-    items.push(item);
-  });
-
-  displayItemList(items);
+db.ref('items').on('value', function (snapshot) {
+  displayItemList();
 });
 
 // Load the item content based on the URL hash
-window.addEventListener('DOMContentLoaded', function() {
+window.addEventListener('DOMContentLoaded', function () {
   var itemHash = window.location.hash.substr(1);
   var itemName = decodeURIComponent(itemHash);
 
@@ -119,7 +115,7 @@ window.addEventListener('DOMContentLoaded', function() {
     .equalTo(itemName)
     .limitToFirst(1)
     .once('value')
-    .then(function(snapshot) {
+    .then(function (snapshot) {
       if (!snapshot.exists()) {
         // Handle invalid or non-existing item names
         console.log('Item not found: ' + itemName);
@@ -128,21 +124,14 @@ window.addEventListener('DOMContentLoaded', function() {
         updateItemPage(item);
       }
     })
-    .catch(function(error) {
+    .catch(function (error) {
       console.log('Error getting item:', error);
     });
 });
 
 // Call the displayItemList function to populate the item list on the index.html page
-db.ref('items').once('value', function(snapshot) {
-  var items = [];
-
-  snapshot.forEach(function(childSnapshot) {
-    var item = childSnapshot.val();
-    items.push(item);
-  });
-
-  displayItemList(items);
+db.ref('items').once('value', function (snapshot) {
+  displayItemList();
 });
 
 // Function to handle editing an item version
@@ -158,10 +147,10 @@ function editItem(itemName, versionKey, version) {
       image: newImage,
       description: newDescription
     })
-      .then(function() {
+      .then(function () {
         console.log('Item version updated successfully');
       })
-      .catch(function(error) {
+      .catch(function (error) {
         console.error('Error updating item version:', error);
       });
   }
@@ -174,13 +163,3 @@ function deleteItem(key, versionKey) {
     db.ref('items/' + key + '/' + versionKey).remove();
   }
 }
-
-// Update the total count
-var totalElement = document.getElementById('total');
-var totalCount = 0;
-
-itemList.forEach(function (item) {
-  totalCount += item.count;
-});
-
-totalElement.textContent = 'Total Count: ' + totalCount;
