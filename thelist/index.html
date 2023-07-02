@@ -25,9 +25,13 @@
   <script>
     // Update the total count
     var totalElement = document.getElementById('total');
-    totalElement.textContent = itemList.reduce(function (acc, item) {
-      return acc + item.count;
-    }, 0);
+    var totalCount = 0;
+
+    itemList.forEach(function (item) {
+      totalCount += item.count;
+    });
+
+    totalElement.textContent = 'Total Count: ' + totalCount;
   </script>
 </body>
 </html>
