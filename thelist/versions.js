@@ -8,7 +8,7 @@ var firebaseConfig = {
     messagingSenderId: "133562798111",
     appId: "1:133562798111:web:34a18cd64c6202314cc52a"
     };
-  
+
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
@@ -49,7 +49,7 @@ function displayVersions() {
       versionImage.alt = version + ' Image';
 
       var versionDescription = document.createElement('p');
-      versionDescription.textContent = 'Description: ' + versionData.description.replace(/\n/g, '<br>');
+      versionDescription.innerHTML = 'Description: <br>' + versionData.description.replace(/\n/g, '<br>');
 
       versionCard.appendChild(versionName);
       versionCard.appendChild(versionCount);
