@@ -174,3 +174,13 @@ function deleteItem(key, versionKey) {
     db.ref('items/' + key + '/' + versionKey).remove();
   }
 }
+
+// Update the total count
+var totalElement = document.getElementById('total');
+var totalCount = 0;
+
+itemList.forEach(function (item) {
+  totalCount += item.count;
+});
+
+totalElement.textContent = 'Total Count: ' + totalCount;

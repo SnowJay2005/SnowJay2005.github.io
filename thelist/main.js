@@ -60,5 +60,15 @@ function displayItemList() {
   });
 }
 
+// Update the total count
+var totalElement = document.getElementById('total');
+var totalCount = 0;
+
+itemList.forEach(function (item) {
+  totalCount += item.count;
+});
+
+totalElement.textContent = 'Total Count: ' + totalCount;
+
 // Call the displayItemList function to populate the item list on the main page
 displayItemList();
