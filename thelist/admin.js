@@ -62,7 +62,7 @@ function displayItemList() {
         });
       });
 
-      totalElement.textContent = 'Total Count: ' + totalCount;
+      totalElement.textContent = totalCount;
     } catch (e) {
       console.error(e);
     }

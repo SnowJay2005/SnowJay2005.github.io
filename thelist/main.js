@@ -61,7 +61,7 @@ function displayItemList() {
       });
 
       // Update the total count
-      totalElement.textContent = 'Total Count: ' + totalCount;
+      totalElement.textContent = totalCount;
     } catch (e) {
       console.error(e);
     }
