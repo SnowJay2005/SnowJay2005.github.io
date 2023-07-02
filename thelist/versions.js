@@ -49,7 +49,7 @@ function displayVersions() {
       versionImage.alt = version + ' Image';
 
       var versionDescription = document.createElement('p');
-      versionDescription.innerHTML = 'Description: <br>' + versionData.description.replace(/\n/g, '<br>');
+      versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
 
       versionCard.appendChild(versionName);
       versionCard.appendChild(versionCount);
