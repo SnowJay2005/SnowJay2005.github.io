@@ -163,17 +163,3 @@ function deleteItem(key, versionKey) {
     db.ref('items/' + key + '/' + versionKey).remove();
   }
 }
-
-// Function to check the password and grant access to the admin panel
-function checkPassword() {
-  var password = document.getElementById('password').value;
-
-  // Replace 'YOUR_ADMIN_PASSWORD' with your desired password
-  if (password === 'YOUR_ADMIN_PASSWORD') {
-    // If the password is correct, redirect to the admin panel
-    window.location.href = 'admin_panel.html';
-  } else {
-    // If the password is incorrect, show an error message
-    alert('Incorrect password. GET OUT WHORE.');
-  }
-}
