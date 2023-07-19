@@ -35,7 +35,7 @@ function displayItemList() {
 
           var itemNameElement = document.createElement('a');
           itemNameElement.textContent = itemName + ' (' + versionKey + ')';
-          itemNameElement.href = 'item.html#' + encodeURIComponent(itemName);
+          itemNameElement.href = 'versions.html#' + encodeURIComponent(itemName);
 
           var itemCount = document.createElement('p');
           itemCount.textContent = 'Count: ' + version.count;
@@ -161,5 +161,19 @@ function editItem(itemName, versionKey, version) {
 function deleteItem(key, versionKey) {
   if (confirm('Are you sure you want to delete this item version?')) {
     db.ref('items/' + key + '/' + versionKey).remove();
+  }
+}
+
+// Function to check the password and grant access to the admin panel
+function checkPassword() {
+  var password = document.getElementById('password').value;
+
+  // Replace 'YOUR_ADMIN_PASSWORD' with your desired password
+  if (password === 'YOUR_ADMIN_PASSWORD') {
+    // If the password is correct, redirect to the admin panel
+    window.location.href = 'admin_panel.html';
+  } else {
+    // If the password is incorrect, show an error message
+    alert('Incorrect password. GET OUT WHORE.');
   }
 }

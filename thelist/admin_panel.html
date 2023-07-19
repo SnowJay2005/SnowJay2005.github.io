@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+</head>
+<body>
+  <header>
+    <h1>Admin Panel</h1>
+    <h2>Total: <span id="total">0</span></h2>
+  </header>
+
+  <section>
+    <h2>Add New Item</h2>
+    <form id="new-item-form">
+      <label for="item-name">Name:</label>
+      <input type="text" id="item-name" required>
+
+      <label for="item-name">Version:</label>
+      <input type="text" id="item-version" required>
+
+      <label for="item-count">Count:</label>
+      <input type="number" id="item-count" required>
+
+      <label for="item-image">Image:</label>
+      <input type="text" id="item-image" required>
+
+      <label for="item-description">Description:</label>
+      <textarea id="item-description" required></textarea>
+
+      <button type="submit">Add Item</button>
+    </form>
+  </section>
+
+  <section id="item-list">
+    <!-- List of items will be dynamically generated here -->
+  </section>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.7.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.7.0/firebase-database.js"></script>
+
+  <!-- Admin panel script -->
+  <script src="admin.js"></script>
+</body>
+</html>
