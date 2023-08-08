@@ -50,12 +50,14 @@ function displayVersions() {
 
       // Check if censorship is enabled in local storage
       var censorshipEnabled = localStorage.getItem('censorshipEnabled');
-      if (censorshipEnabled === 'false') {
-        versionImage.src = versionData.image; // Show the original image
+      if (censorshipEnabled === null) {
+        // If censorship preference is not set in local storage, set it to 'true' by default
+        localStorage.setItem('censorshipEnabled', 'true');
+        censorshipEnabled = true;
       } else {
-        versionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
-        versionImage.classList.add('censored-image'); // Add the 'censored-image' class
+        censorshipEnabled = censorshipEnabled === 'true';
       }
+
 
       var versionDescription = document.createElement('p');
       versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
@@ -67,21 +69,23 @@ function displayVersions() {
       versionsListElement.appendChild(versionCard);
     });
   });
-
-  // Add an event listener to the button
-  var toggleButton = document.getElementById('toggleCensorshipButton');
-  toggleButton.addEventListener('click', function () {
-    toggleImageCensorship();
-
-  // Update the local storage value to match the current censorship status
-  var censorshipEnabled = localStorage.getItem('censorshipEnabled');
-  var newCensorshipStatus = (censorshipEnabled === 'true') ? 'false' : 'true';
-  localStorage.setItem('censorshipEnabled', newCensorshipStatus);
-  });
 }
+   // Toggle the image censorship based on the censorshipEnabled value
+   toggleImageCensorship(censorshipEnabled);
+
+   // Add an event listener to the toggle button
+   var toggleButton = document.getElementById('toggleCensorshipButton');
+   toggleButton.addEventListener('click', function () {
+     // Toggle the image censorship
+     censorshipEnabled = !censorshipEnabled;
+     toggleImageCensorship(censorshipEnabled);
+ 
+     // Update the local storage value to match the current censorship status
+     localStorage.setItem('censorshipEnabled', censorshipEnabled.toString());
+   });
 
 // Function to toggle image censorship
-function toggleImageCensorship() {
+function toggleImageCensorship(censorshipEnabled) {
   var images = document.querySelectorAll('img');
 
   if (images.length > 0) {
@@ -89,22 +93,17 @@ function toggleImageCensorship() {
       var image = images[i];
       var censorImageURL = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
 
-      if (image.classList.contains('censored-image')) {
-        // If the image is currently censored, show the original image
-        image.src = image.dataset.originalSrc; // Use the original image URL stored in 'data-original-src'
-      } else {
-        // If the image is currently not censored, censor it by showing the censor image
+      if (censorshipEnabled) {
+        // If censorship is enabled, show the censor image
         image.dataset.originalSrc = image.src; // Store the original image URL in 'data-original-src'
         image.src = censorImageURL; // Replace the 'src' attribute with the censor image URL
+        image.classList.add('censored-image'); // Add the 'censored-image' class
+      } else {
+        // If censorship is disabled, show the original image
+        image.src = image.dataset.originalSrc; // Use the original image URL stored in 'data-original-src'
+        image.classList.remove('censored-image'); // Remove the 'censored-image' class
       }
-
-      // Toggle the 'censored-image' class
-      image.classList.toggle('censored-image');
     }
-
-    // Store the user's preference in local storage
-    var censorshipEnabled = images[0].classList.contains('censored-image');
-    localStorage.setItem('censorshipEnabled', censorshipEnabled);
   }
 }
 
