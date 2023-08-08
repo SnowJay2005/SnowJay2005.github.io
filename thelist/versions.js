@@ -12,6 +12,9 @@ var firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
+// Get a reference to the Firebase Realtime Database
+var db = firebase.database();
+
 // Variable to store censorship status
 var censorshipEnabled;
 
