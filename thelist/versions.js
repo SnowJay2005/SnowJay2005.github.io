@@ -92,10 +92,12 @@ function displayVersions() {
       for (var j = 0; j < descriptionImages.length; j++) {
         var descriptionImage = descriptionImages[j];
 
+        // Store the original image URL in 'data-original-src' regardless of censorship preference
+        descriptionImage.dataset.originalSrc = descriptionImage.src;
+
         // Check the censorship preference for the description image
         var censorshipEnabled = localStorage.getItem('censorshipEnabled');
         if (censorshipEnabled === 'true') {
-          descriptionImage.dataset.originalSrc = descriptionImage.src;
           descriptionImage.classList.add('censored-image');
           descriptionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
         } else {
