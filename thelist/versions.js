@@ -50,11 +50,11 @@ function displayVersions() {
 
       // Check if censorship is enabled in local storage
       var censorshipEnabled = localStorage.getItem('censorshipEnabled');
-      if (censorshipEnabled === 'true') {
-        versionImage.src = 'https://example.com/censor-image.png'; // Replace with the URL of your censor image
-        versionImage.classList.add('censored-image'); // Add the 'censored-image' class
-      } else {
+      if (censorshipEnabled === 'false') {
         versionImage.src = versionData.image; // Show the original image
+      } else {
+        versionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
+        versionImage.classList.add('censored-image'); // Add the 'censored-image' class
       }
 
       var versionDescription = document.createElement('p');
