@@ -48,16 +48,19 @@ function displayVersions() {
       versionImage.src = versionData.image.replace('no', 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/HD_transparent_picture.png/320px-HD_transparent_picture.png');
       versionImage.alt = version + ' Image';
 
+
       // Check if censorship is enabled in local storage
-      var censorshipEnabled = localStorage.getItem('censorshipEnabled');
-      if (censorshipEnabled === null) {
+      var censorshipLocalStorage = localStorage.getItem('censorshipEnabled');
+      if (censorshipLocalStorage === null) {
         // If censorship preference is not set in local storage, set it to 'true' by default
         localStorage.setItem('censorshipEnabled', 'true');
         censorshipEnabled = true;
       } else {
-        censorshipEnabled = censorshipEnabled === 'true';
+        censorshipEnabled = censorshipLocalStorage === 'true';
       }
 
+      // Toggle the image censorship based on the censorshipEnabled value
+      toggleImageCensorship(censorshipEnabled);
 
       var versionDescription = document.createElement('p');
       versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
@@ -69,20 +72,18 @@ function displayVersions() {
       versionsListElement.appendChild(versionCard);
     });
   });
-}
-   // Toggle the image censorship based on the censorshipEnabled value
-   toggleImageCensorship(censorshipEnabled);
 
-   // Add an event listener to the toggle button
-   var toggleButton = document.getElementById('toggleCensorshipButton');
-   toggleButton.addEventListener('click', function () {
-     // Toggle the image censorship
-     censorshipEnabled = !censorshipEnabled;
-     toggleImageCensorship(censorshipEnabled);
- 
-     // Update the local storage value to match the current censorship status
-     localStorage.setItem('censorshipEnabled', censorshipEnabled.toString());
-   });
+  // Add an event listener to the toggle button
+  var toggleButton = document.getElementById('toggleCensorshipButton');
+  toggleButton.addEventListener('click', function () {
+    // Toggle the image censorship
+    censorshipEnabled = !censorshipEnabled;
+    toggleImageCensorship(censorshipEnabled);
+
+    // Update the local storage value to match the current censorship status
+    localStorage.setItem('censorshipEnabled', censorshipEnabled.toString());
+  });
+}
 
 // Function to toggle image censorship
 function toggleImageCensorship(censorshipEnabled) {
