@@ -48,6 +48,15 @@ function displayVersions() {
       versionImage.src = versionData.image.replace('no', 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/HD_transparent_picture.png/320px-HD_transparent_picture.png');
       versionImage.alt = version + ' Image';
 
+      // Check if censorship is enabled in local storage
+      var censorshipEnabled = localStorage.getItem('censorshipEnabled');
+      if (censorshipEnabled === 'true') {
+        versionImage.src = 'https://example.com/censor-image.png'; // Replace with the URL of your censor image
+        versionImage.classList.add('censored-image'); // Add the 'censored-image' class
+      } else {
+        versionImage.src = versionData.image; // Show the original image
+      }
+
       var versionDescription = document.createElement('p');
       versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
 
@@ -98,12 +107,6 @@ function toggleImageCensorship() {
     localStorage.setItem('censorshipEnabled', censorshipEnabled);
   }
 }
-  
-// Check if the user's preference is stored in local storage and apply it
-  var censorshipEnabled = localStorage.getItem('censorshipEnabled');
-  if (censorshipEnabled === 'true') {
-    toggleImageCensorship();
-  }
-  
+
 // Call the displayVersions function when the page loads
 window.onload = displayVersions;
