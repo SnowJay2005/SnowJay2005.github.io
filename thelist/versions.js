@@ -60,6 +60,9 @@ function displayVersions() {
   });
 }
 
+// Call the displayVersions function when the page loads
+window.onload = displayVersions;
+
 // Function to toggle image censorship
 function toggleImageCensorship() {
   var images = document.querySelectorAll('img');
@@ -85,6 +88,3 @@ if (censorshipEnabled === 'true') {
 // Add an event listener to the button
 var toggleButton = document.getElementById('toggleCensorshipButton');
 toggleButton.addEventListener('click', toggleImageCensorship);
-
-// Call the displayVersions function when the page loads
-window.onload = displayVersions;
