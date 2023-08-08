@@ -64,14 +64,16 @@ function displayVersions() {
 function toggleImageCensorship() {
   var images = document.querySelectorAll('img');
 
-  for (var i = 0; i < images.length; i++) {
-    var image = images[i];
-    image.classList.toggle('censored-image');
-  }
+  if (images.length > 0) {
+    for (var i = 0; i < images.length; i++) {
+      var image = images[i];
+      image.classList.toggle('censored-image');
+    }
 
-  // Store the user's preference in local storage
-  var censorshipEnabled = images[0].classList.contains('censored-image');
-  localStorage.setItem('censorshipEnabled', censorshipEnabled);
+    // Store the user's preference in local storage
+    var censorshipEnabled = images[0].classList.contains('censored-image');
+    localStorage.setItem('censorshipEnabled', censorshipEnabled);
+  }
 }
 
 // Check if the user's preference is stored in local storage and apply it
