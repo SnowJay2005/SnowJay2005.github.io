@@ -15,6 +15,9 @@ firebase.initializeApp(firebaseConfig);
 // Get a reference to the Firebase Realtime Database
 var db = firebase.database();
 
+// Variable to store censorship status
+var censorshipEnabled;
+
 // Function to display the versions
 function displayVersions() {
   // Retrieve the item name from the URL hash
@@ -27,11 +30,11 @@ function displayVersions() {
   var versionsRef = db.ref('items/' + itemName);
 
   // Attach a listener to listen for changes in the versions
-  versionsRef.on('value', function(snapshot) {
+  versionsRef.on('value', function (snapshot) {
     var versionsListElement = document.getElementById('versions-list');
     versionsListElement.innerHTML = '';
 
-    snapshot.forEach(function(childSnapshot) {
+    snapshot.forEach(function (childSnapshot) {
       var version = childSnapshot.key;
       var versionData = childSnapshot.val();
 
@@ -48,7 +51,6 @@ function displayVersions() {
       versionImage.src = versionData.image.replace('no', 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/HD_transparent_picture.png/320px-HD_transparent_picture.png');
       versionImage.alt = version + ' Image';
 
-
       // Check if censorship is enabled in local storage
       var censorshipLocalStorage = localStorage.getItem('censorshipEnabled');
       if (censorshipLocalStorage === null) {
@@ -60,7 +62,7 @@ function displayVersions() {
       }
 
       // Toggle the image censorship based on the censorshipEnabled value
-      toggleImageCensorship(censorshipEnabled);
+      toggleImageCensorship(censorshipEnabled, versionImage);
 
       var versionDescription = document.createElement('p');
       versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
@@ -78,7 +80,14 @@ function displayVersions() {
   toggleButton.addEventListener('click', function () {
     // Toggle the image censorship
     censorshipEnabled = !censorshipEnabled;
-    toggleImageCensorship(censorshipEnabled);
+    var images = document.querySelectorAll('img');
+
+    if (images.length > 0) {
+      for (var i = 0; i < images.length; i++) {
+        var image = images[i];
+        toggleImageCensorship(censorshipEnabled, image);
+      }
+    }
 
     // Update the local storage value to match the current censorship status
     localStorage.setItem('censorshipEnabled', censorshipEnabled.toString());
@@ -86,25 +95,18 @@ function displayVersions() {
 }
 
 // Function to toggle image censorship
-function toggleImageCensorship(censorshipEnabled) {
-  var images = document.querySelectorAll('img');
+function toggleImageCensorship(censorshipEnabled, image) {
+  var censorImageURL = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
 
-  if (images.length > 0) {
-    for (var i = 0; i < images.length; i++) {
-      var image = images[i];
-      var censorImageURL = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
-
-      if (censorshipEnabled) {
-        // If censorship is enabled, show the censor image
-        image.dataset.originalSrc = image.src; // Store the original image URL in 'data-original-src'
-        image.src = censorImageURL; // Replace the 'src' attribute with the censor image URL
-        image.classList.add('censored-image'); // Add the 'censored-image' class
-      } else {
-        // If censorship is disabled, show the original image
-        image.src = image.dataset.originalSrc; // Use the original image URL stored in 'data-original-src'
-        image.classList.remove('censored-image'); // Remove the 'censored-image' class
-      }
-    }
+  if (censorshipEnabled) {
+    // If censorship is enabled, show the censor image
+    image.dataset.originalSrc = image.src; // Store the original image URL in 'data-original-src'
+    image.src = censorImageURL; // Replace the 'src' attribute with the censor image URL
+    image.classList.add('censored-image'); // Add the 'censored-image' class
+  } else {
+    // If censorship is disabled, show the original image
+    image.src = image.dataset.originalSrc || versionData.image; // Use the original image URL stored in 'data-original-src', if available
+    image.classList.remove('censored-image'); // Remove the 'censored-image' class
   }
 }
 
