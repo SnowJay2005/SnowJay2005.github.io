@@ -87,4 +87,11 @@ if (censorshipEnabled === 'true') {
 
 // Add an event listener to the button
 var toggleButton = document.getElementById('toggleCensorshipButton');
-toggleButton.addEventListener('click', toggleImageCensorship);
+toggleButton.addEventListener('click', function () {
+  toggleImageCensorship();
+
+  // Update the local storage value to match the current censorship status
+  var censorshipEnabled = localStorage.getItem('censorshipEnabled');
+  var newCensorshipStatus = (censorshipEnabled === 'true') ? 'false' : 'true';
+  localStorage.setItem('censorshipEnabled', newCensorshipStatus);
+});
