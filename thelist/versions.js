@@ -83,6 +83,8 @@ function displayVersions() {
       versionImage.src = versionData.image.replace('no', 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/HD_transparent_picture.png/320px-HD_transparent_picture.png');
       versionImage.alt = version + ' Image';
 
+      versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
+
       // Toggle the image censorship based on the censorshipEnabled value
       toggleImageCensorship(censorshipEnabled, versionImage);
 
@@ -90,7 +92,6 @@ function displayVersions() {
       versionImage.dataset.originalSrc = versionData.image;
 
       var versionDescription = document.createElement('p');
-      versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
 
       versionCard.appendChild(versionName);
       versionCard.appendChild(versionCount);
