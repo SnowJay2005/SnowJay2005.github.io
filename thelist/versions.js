@@ -12,11 +12,40 @@ var firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
-// Get a reference to the Firebase Realtime Database
-var db = firebase.database();
-
 // Variable to store censorship status
 var censorshipEnabled;
+
+// Check if censorship preference is set in local storage on page load
+var censorshipLocalStorage = localStorage.getItem('censorshipEnabled');
+if (censorshipLocalStorage === null) {
+  // If censorship preference is not set in local storage, set it to 'true' by default
+  localStorage.setItem('censorshipEnabled', 'true');
+  censorshipEnabled = true;
+} else {
+  censorshipEnabled = censorshipLocalStorage === 'true';
+}
+
+// Function to toggle image censorship
+function toggleImageCensorship(censorshipEnabled) {
+  var images = document.querySelectorAll('img');
+
+  if (images.length > 0) {
+    for (var i = 0; i < images.length; i++) {
+      var image = images[i];
+      var censorImageURL = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
+
+      if (censorshipEnabled) {
+        // If censorship is enabled, show the censor image
+        image.src = censorImageURL; // Replace the 'src' attribute with the censor image URL
+        image.classList.add('censored-image'); // Add the 'censored-image' class
+      } else {
+        // If censorship is disabled, show the original image
+        image.src = image.dataset.originalSrc || ''; // Use the original image URL stored in 'data-original-src', if available
+        image.classList.remove('censored-image'); // Remove the 'censored-image' class
+      }
+    }
+  }
+}
 
 // Function to display the versions
 function displayVersions() {
@@ -67,50 +96,25 @@ function displayVersions() {
       versionsListElement.appendChild(versionCard);
     });
   });
-
-  // Add an event listener to the toggle button
-  var toggleButton = document.getElementById('toggleCensorshipButton');
-  toggleButton.addEventListener('click', function () {
-    // Toggle the image censorship
-    censorshipEnabled = !censorshipEnabled;
-    var images = document.querySelectorAll('img');
-
-    if (images.length > 0) {
-      for (var i = 0; i < images.length; i++) {
-        var image = images[i];
-        toggleImageCensorship(censorshipEnabled, image);
-      }
-    }
-
-    // Update the local storage value to match the current censorship status
-    localStorage.setItem('censorshipEnabled', censorshipEnabled.toString());
-  });
-}
-
-// Function to toggle image censorship
-function toggleImageCensorship(censorshipEnabled, image) {
-  var censorImageURL = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
-
-  if (censorshipEnabled) {
-    // If censorship is enabled, show the censor image
-    image.src = censorImageURL; // Replace the 'src' attribute with the censor image URL
-    image.classList.add('censored-image'); // Add the 'censored-image' class
-  } else {
-    // If censorship is disabled, show the original image
-    image.src = image.dataset.originalSrc || ''; // Use the original image URL stored in 'data-original-src', if available
-    image.classList.remove('censored-image'); // Remove the 'censored-image' class
-  }
-}
-
-// Check if censorship preference is set in local storage on page load
-var censorshipLocalStorage = localStorage.getItem('censorshipEnabled');
-if (censorshipLocalStorage === null) {
-  // If censorship preference is not set in local storage, set it to 'true' by default
-  localStorage.setItem('censorshipEnabled', 'true');
-  censorshipEnabled = true;
-} else {
-  censorshipEnabled = censorshipLocalStorage === 'true';
 }
 
 // Call the displayVersions function when the page loads
 window.onload = displayVersions;
+
+// Add an event listener to the toggle button
+var toggleButton = document.getElementById('toggleCensorshipButton');
+toggleButton.addEventListener('click', function () {
+  // Toggle the image censorship
+  censorshipEnabled = !censorshipEnabled;
+  var images = document.querySelectorAll('img');
+
+  if (images.length > 0) {
+    for (var i = 0; i < images.length; i++) {
+      var image = images[i];
+      toggleImageCensorship(censorshipEnabled, image);
+    }
+  }
+
+  // Update the local storage value to match the current censorship status
+  localStorage.setItem('censorshipEnabled', censorshipEnabled.toString());
+});
