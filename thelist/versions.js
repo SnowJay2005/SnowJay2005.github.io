@@ -51,18 +51,11 @@ function displayVersions() {
       versionImage.src = versionData.image.replace('no', 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/HD_transparent_picture.png/320px-HD_transparent_picture.png');
       versionImage.alt = version + ' Image';
 
-      // Check if censorship is enabled in local storage
-      var censorshipLocalStorage = localStorage.getItem('censorshipEnabled');
-      if (censorshipLocalStorage === null) {
-        // If censorship preference is not set in local storage, set it to 'true' by default
-        localStorage.setItem('censorshipEnabled', 'true');
-        censorshipEnabled = true;
-      } else {
-        censorshipEnabled = censorshipLocalStorage === 'true';
-      }
-
       // Toggle the image censorship based on the censorshipEnabled value
       toggleImageCensorship(censorshipEnabled, versionImage);
+
+      // Store the original image URL in 'data-original-src'
+      versionImage.dataset.originalSrc = versionData.image;
 
       var versionDescription = document.createElement('p');
       versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
@@ -100,14 +93,23 @@ function toggleImageCensorship(censorshipEnabled, image) {
 
   if (censorshipEnabled) {
     // If censorship is enabled, show the censor image
-    image.dataset.originalSrc = image.src; // Store the original image URL in 'data-original-src'
     image.src = censorImageURL; // Replace the 'src' attribute with the censor image URL
     image.classList.add('censored-image'); // Add the 'censored-image' class
   } else {
     // If censorship is disabled, show the original image
-    image.src = image.dataset.originalSrc || versionData.image; // Use the original image URL stored in 'data-original-src', if available
+    image.src = image.dataset.originalSrc || ''; // Use the original image URL stored in 'data-original-src', if available
     image.classList.remove('censored-image'); // Remove the 'censored-image' class
   }
+}
+
+// Check if censorship preference is set in local storage on page load
+var censorshipLocalStorage = localStorage.getItem('censorshipEnabled');
+if (censorshipLocalStorage === null) {
+  // If censorship preference is not set in local storage, set it to 'true' by default
+  localStorage.setItem('censorshipEnabled', 'true');
+  censorshipEnabled = true;
+} else {
+  censorshipEnabled = censorshipLocalStorage === 'true';
 }
 
 // Call the displayVersions function when the page loads
