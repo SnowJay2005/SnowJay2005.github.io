@@ -83,6 +83,18 @@ function toggleImageCensorship() {
   if (images.length > 0) {
     for (var i = 0; i < images.length; i++) {
       var image = images[i];
+      var censorImageURL = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
+
+      if (image.classList.contains('censored-image')) {
+        // If the image is currently censored, show the original image
+        image.src = image.dataset.originalSrc; // Use the original image URL stored in 'data-original-src'
+      } else {
+        // If the image is currently not censored, censor it by showing the censor image
+        image.dataset.originalSrc = image.src; // Store the original image URL in 'data-original-src'
+        image.src = censorImageURL; // Replace the 'src' attribute with the censor image URL
+      }
+
+      // Toggle the 'censored-image' class
       image.classList.toggle('censored-image');
     }
 
