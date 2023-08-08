@@ -93,7 +93,7 @@ function displayVersions() {
           var descriptionImage = descriptionImages[j];
           descriptionImage.dataset.originalSrc = descriptionImage.src;
           descriptionImage.classList.add('censored-image');
-          descriptionImage.src = 'https://example.com/censor-image.png'; // Replace with the URL of your censor image
+          descriptionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
         }
       }
 
@@ -102,7 +102,7 @@ function displayVersions() {
       if (censorshipEnabled === 'true') {
         versionImage.dataset.originalSrc = versionImage.src;
         versionImage.classList.add('censored-image');
-        versionImage.src = 'https://example.com/censor-image.png'; // Replace with the URL of your censor image
+        versionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
       } else {
         versionImage.src = versionData.image; // Show the original image
       }
