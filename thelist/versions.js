@@ -58,11 +58,6 @@ function displayVersions() {
       versionsListElement.appendChild(versionCard);
     });
   });
-  // Check if the user's preference is stored in local storage and apply it
-  var censorshipEnabled = localStorage.getItem('censorshipEnabled');
-  if (censorshipEnabled === 'true') {
-    toggleImageCensorship();
-  }
 
   // Add an event listener to the button
   var toggleButton = document.getElementById('toggleCensorshipButton');
@@ -103,6 +98,12 @@ function toggleImageCensorship() {
     localStorage.setItem('censorshipEnabled', censorshipEnabled);
   }
 }
-
+  
+// Check if the user's preference is stored in local storage and apply it
+  var censorshipEnabled = localStorage.getItem('censorshipEnabled');
+  if (censorshipEnabled === 'true') {
+    toggleImageCensorship();
+  }
+  
 // Call the displayVersions function when the page loads
 window.onload = displayVersions;
