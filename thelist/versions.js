@@ -86,6 +86,17 @@ function displayVersions() {
       var versionDescription = document.createElement('p');
       versionDescription.innerHTML = versionData.description.replace(/\n/g, '<br>');
 
+          // Check for images in the description
+      var descriptionImages = versionDescription.getElementsByTagName('img');
+      if (descriptionImages.length > 0) {
+      for (var j = 0; j < descriptionImages.length; j++) {
+        var descriptionImage = descriptionImages[j];
+        descriptionImage.dataset.originalSrc = descriptionImage.src;
+        descriptionImage.classList.add('censored-image');
+        descriptionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
+        }
+      }
+
       // Toggle the image censorship based on the censorshipEnabled value
       toggleImageCensorship(censorshipEnabled, versionImage);
 
