@@ -62,3 +62,8 @@ img {
   text-decoration: underline;
   color: #e0e0e0
 }
+
+.censored-image {
+  background-image: url('https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288');
+  background-size: cover;
+}

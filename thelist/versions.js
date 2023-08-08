@@ -60,5 +60,29 @@ function displayVersions() {
   });
 }
 
+// Function to toggle image censorship
+function toggleImageCensorship() {
+  var images = document.querySelectorAll('img');
+
+  for (var i = 0; i < images.length; i++) {
+    var image = images[i];
+    image.classList.toggle('censored-image');
+  }
+
+  // Store the user's preference in local storage
+  var censorshipEnabled = images[0].classList.contains('censored-image');
+  localStorage.setItem('censorshipEnabled', censorshipEnabled);
+}
+
+// Check if the user's preference is stored in local storage and apply it
+var censorshipEnabled = localStorage.getItem('censorshipEnabled');
+if (censorshipEnabled === 'true') {
+  toggleImageCensorship();
+}
+
+// Add an event listener to the button
+var toggleButton = document.getElementById('toggleCensorshipButton');
+toggleButton.addEventListener('click', toggleImageCensorship);
+
 // Call the displayVersions function when the page loads
 window.onload = displayVersions;
