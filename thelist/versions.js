@@ -80,7 +80,7 @@ function displayVersions() {
       versionCount.textContent = 'Count: ' + versionData.count;
 
       var versionImage = document.createElement('img');
-      versionImage.src = versionData.image.replace('no', 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/HD_transparent_picture.png/320px-HD_transparent_picture.png');
+      versionImage.src = versionData.image.replace('no', 'https://cdn.discordapp.com/attachments/784434827163598898/1139896459500716082/transparent_1x1.png');
       versionImage.alt = version + ' Image';
 
       var versionDescription = document.createElement('p');
