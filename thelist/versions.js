@@ -35,7 +35,7 @@ function toggleImageCensorship(censorshipEnabled) {
   if (images.length > 0) {
     for (var i = 0; i < images.length; i++) {
       var image = images[i];
-      var censorImageURL = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
+      var censorImageURL = 'https://files.catbox.moe/7db0ru.png'; // Replace with the URL of your censor image
 
       if (censorshipEnabled) {
         // If censorship is enabled, show the censor image
@@ -80,7 +80,7 @@ function displayVersions() {
       versionCount.textContent = 'Count: ' + versionData.count;
 
       var versionImage = document.createElement('img');
-      versionImage.src = versionData.image.replace('no', 'https://cdn.discordapp.com/attachments/784434827163598898/1139896459500716082/transparent_1x1.png');
+      versionImage.src = versionData.image.replace('no', 'https://files.catbox.moe/65av9t.png');
       versionImage.alt = version + ' Image';
 
       var versionDescription = document.createElement('p');
@@ -99,7 +99,7 @@ function displayVersions() {
         var censorshipEnabled = localStorage.getItem('censorshipEnabled');
         if (censorshipEnabled === 'true') {
           descriptionImage.classList.add('censored-image');
-          descriptionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
+          descriptionImage.src = 'https://files.catbox.moe/7db0ru.png'; // Replace with the URL of your censor image
         } else {
           descriptionImage.src = descriptionImage.dataset.originalSrc; // Show the original image
         }
@@ -111,7 +111,7 @@ function displayVersions() {
     if (censorshipEnabled === 'true') {
       versionImage.dataset.originalSrc = versionImage.src;
       versionImage.classList.add('censored-image');
-      versionImage.src = 'https://media.discordapp.net/attachments/784434827163598898/1138379532198486077/censored_images.png?width=1440&height=288'; // Replace with the URL of your censor image
+      versionImage.src = 'https://files.catbox.moe/7db0ru.png'; // Replace with the URL of your censor image
     } else {
       versionImage.src = versionData.image; // Show the original image
     }
