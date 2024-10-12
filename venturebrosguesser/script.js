@@ -6,7 +6,8 @@ const feedbackDisplay = document.getElementById('feedback');
 let episodes = []; // Array to hold episode names
 let currentEpisode = null;
 let score = 0;
-let highScore = localStorage.getItem('highScore') || 0; // Retrieve high score from localStorage
+let highScoreKey = 'highScore_VentureBros'; // Unique key for Gravity Falls high score
+let highScore = localStorage.getItem(highScoreKey) || 0; // Retrieve high score from localStorage
 
 // Function to load episode names (you can hardcode them for now)
 function loadEpisodes() {
@@ -152,7 +153,7 @@ document.getElementById('submit-guess').addEventListener('click', () => {
     // Check if current score is a new high score
     if (score > highScore) {
         highScore = score;
-        localStorage.setItem('highScore', highScore); // Save new high score to localStorage
+        localStorage.setItem(highScoreKey, highScore); // Save new high score to localStorage
     }
 	
     // Update the score display
