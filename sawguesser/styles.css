@@ -1,0 +1,35 @@
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin: 20px;
+}
+
+img {
+    max-height: 480px; /* Ensures the image does not exceed this height */
+    max-width: 100%;   /* Prevents the image from stretching beyond the container width */
+    height: auto;      /* Maintain aspect ratio */
+    width: auto;       /* Width adjusts automatically to maintain aspect ratio */
+    display: block;    /* Ensure it's a block element */
+    margin: 0 auto;    /* Center the image */
+}
+
+select, button {
+    margin: 20px;
+}
+
+/* Position the button in the top left */
+#show-link-button {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 10px 15px;
+    background-color: #4CAF50;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+#show-link-button:hover {
+    background-color: #45a049;
+}
