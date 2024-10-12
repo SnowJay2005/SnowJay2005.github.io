@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Show List</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Select a Show!</h1>
+    <ul id="show-list"></ul> <!-- The list of shows will go here -->
+    <script src="shows.js"></script> <!-- Link to the JavaScript file -->
+    <script>
+        // Populate the list of shows dynamically
+        const showList = document.getElementById('show-list');
+        shows.forEach(show => {
+            const listItem = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = show.link; // Set the link to the show's game
+            link.textContent = show.name; // Display the name of the show
+            listItem.appendChild(link);
+            showList.appendChild(listItem); // Add the list item to the show list
+        });
+    </script>
+</body>
+</html>
