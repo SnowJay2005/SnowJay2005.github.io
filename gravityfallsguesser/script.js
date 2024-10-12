@@ -33,7 +33,7 @@ function loadEpisodes() {
     "S01E18 Land Before Swine",
     "S01E19 Dreamscaperers",
     "S01E20 Gideon Rises",
-    "S02E01 Scary-oke.mkv",
+    "S02E01 Scary-oke",
     "S02E02 Into the Bunker",
     "S02E03 The Golf War",
     "S02E04 Sock Opera",
