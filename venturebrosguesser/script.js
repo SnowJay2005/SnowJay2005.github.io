@@ -153,7 +153,7 @@ function startGame() {
 function getRandomFrame() {
     const frameNumber = Math.floor(Math.random() * 10) + 1; // Random number between 1 and 10
     const formattedNumber = String(frameNumber).padStart(3, '0'); // Format as "001" to "010"
-    return `frame_${formattedNumber}.webp`;
+    return `frame_${formattedNumber}.avif`;
 }
 
 // Function to reset the score
