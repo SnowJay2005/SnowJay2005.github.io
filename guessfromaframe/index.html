@@ -21,12 +21,15 @@
             link.href = show.link; // Set the link to the show's game
             link.classList.add('show-button'); // Add a class for styling
 
-            // Get high score, correct guesses, and incorrect guesses from localStorage
-            const highScore = localStorage.getItem(show.highScoreKey) || 0;
-            const correctGuesses = localStorage.getItem(`correctGuesses_${show.highScoreKey}`) || 0;
-            const incorrectGuesses = localStorage.getItem(`incorrectGuesses_${show.highScoreKey}`) || 0;
-            const totalGuesses = parseInt(correctGuesses) + parseInt(incorrectGuesses);
-            const ratio = totalGuesses > 0 ? ((correctGuesses / totalGuesses) * 100).toFixed(2) : 0;
+			// Get high score data from localStorage and parse it
+			const highScoreData = localStorage.getItem(show.highScoreKey);
+			const highScoreObj = highScoreData ? JSON.parse(highScoreData) : {};
+			
+			const highScore = highScoreObj.highScore || 0;
+			const correctGuesses = highScoreObj.correctGuesses || 0;
+			const incorrectGuesses = highScoreObj.incorrectGuesses || 0;
+			const totalGuesses = parseInt(correctGuesses) + parseInt(incorrectGuesses);
+			const ratio = totalGuesses > 0 ? ((correctGuesses / totalGuesses) * 100).toFixed(2) : 0;
 
             // Set the button text with score information
             link.innerHTML = `<strong>${show.name}</strong><br>
