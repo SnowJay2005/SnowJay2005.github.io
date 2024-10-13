@@ -11,22 +11,27 @@ h1 {
 ul {
     list-style-type: none;
     padding: 0;
+    display: flex; /* Change to flexbox for button layout */
+    flex-wrap: wrap; /* Allow items to wrap to the next line */
+    justify-content: center; /* Center align items */
 }
 
 li {
-    margin: 10px 0;
+    margin: 10px; /* Adjust margin for spacing */
 }
 
 a {
     text-decoration: none;
     color: white;
-    font-size: 1.2em;
-    padding: 10px 20px;
+    font-size: 1.5em; /* Increase font size for show names */
+    padding: 10px;
+	width: 300px;
     background-color: #4CAF50; /* Button background color */
     border-radius: 5px; /* Rounded corners */
     display: inline-block;
     transition: background-color 0.3s ease;
     font-weight: bold;
+	box-sizing: border-box; /* Include padding and border in the element's total width and height */
 }
 
 a:hover {
@@ -35,4 +40,9 @@ a:hover {
 
 a:active {
     background-color: #3e8e41; /* Even darker when pressed */
+}
+
+.score {
+    font-size: 0.8em; /* Decrease font size for scores */
+    margin-top: 12px; /* Space between the name and the score */
 }

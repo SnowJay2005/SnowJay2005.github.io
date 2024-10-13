@@ -9,15 +9,29 @@
 <body>
     <h1>Select a Series!</h1>
     <ul id="show-list"></ul> <!-- The list of shows will go here -->
+    
     <script src="shows.js"></script> <!-- Link to the JavaScript file -->
     <script>
         // Populate the list of shows dynamically
         const showList = document.getElementById('show-list');
+        
         shows.forEach(show => {
             const listItem = document.createElement('li');
             const link = document.createElement('a');
             link.href = show.link; // Set the link to the show's game
-            link.textContent = show.name; // Display the name of the show
+            link.classList.add('show-button'); // Add a class for styling
+
+            // Get high score, correct guesses, and incorrect guesses from localStorage
+            const highScore = localStorage.getItem(show.highScoreKey) || 0;
+            const correctGuesses = localStorage.getItem(`correctGuesses_${show.highScoreKey}`) || 0;
+            const incorrectGuesses = localStorage.getItem(`incorrectGuesses_${show.highScoreKey}`) || 0;
+            const totalGuesses = parseInt(correctGuesses) + parseInt(incorrectGuesses);
+            const ratio = totalGuesses > 0 ? ((correctGuesses / totalGuesses) * 100).toFixed(2) : 0;
+
+            // Set the button text with score information
+            link.innerHTML = `<strong>${show.name}</strong><br>
+			<div class="score">High Score: ${highScore}<br>Correct: ${correctGuesses} | Incorrect: ${incorrectGuesses}<br>Ratio: ${ratio}%</div>`;
+
             listItem.appendChild(link);
             showList.appendChild(listItem); // Add the list item to the show list
         });
