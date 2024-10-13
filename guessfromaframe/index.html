@@ -7,8 +7,10 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Select a Series!</h1>
-    <ul id="show-list"></ul> <!-- The list of shows will go here -->
+	<div class="content">
+		<h1>Select a Series!</h1>
+		<ul id="show-list"></ul> <!-- The list of shows will go here -->
+	</div>
     
     <script src="shows.js"></script> <!-- Link to the JavaScript file -->
     <script>
@@ -39,5 +41,10 @@
             showList.appendChild(listItem); // Add the list item to the show list
         });
     </script>
+
+	<!-- Text at the bottom -->
+	<footer>
+		<a href="https://sn0wjay.carrd.co/" class="footer-link">If you want to request another series, DM me on Twitter or Bluesky, or open an issue on the GitHub.</a>
+	</footer>
 </body>
 </html>

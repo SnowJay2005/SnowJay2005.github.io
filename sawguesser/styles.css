@@ -53,3 +53,16 @@ select, button {
 #reset-score:hover {
     background-color: #ff1a1a; /* Darker red on hover */
 }
+
+/* Media query for smaller screens */
+@media (max-width: 800px) {
+    #show-link-button, #reset-score {
+        position: static; /* Reset absolute positioning */
+        display: block; /* Ensure both buttons are block elements */
+        margin: 10px auto; /* Center them and give space */
+    }
+    
+    h1 {
+        margin-top: 20px; /* Add space above the title */
+    }
+}
