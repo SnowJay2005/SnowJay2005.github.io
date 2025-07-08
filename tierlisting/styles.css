@@ -253,3 +253,22 @@ pointer-events: none;
   gap: 4px;
 }
 
+.color-picker-container {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pcr-button {
+  all: unset !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: block !important;
+  background: currentColor !important;
+  border: 1px solid #666 !important;
+  border-radius: 4px !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}

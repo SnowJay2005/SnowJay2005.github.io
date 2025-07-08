@@ -5,6 +5,7 @@ const imageAdder = document.getElementById('imageAdder')
 const exportBtn = document.getElementById('export-btn');
 const importBtn = document.getElementById('import-btn');
 const importJsonInput = document.getElementById('import-json');
+let updateColorTimeout = null;
 
 let tiers = [];
 let pool = [];
@@ -251,53 +252,9 @@ function render() {
         saveToLocal();
       }
     };
-
-    const colorBtn = document.createElement('button');
-    colorBtn.innerHTML = '🎨';
-    colorBtn.title = 'Change Color';
-    colorBtn.onclick = (e) => {
-	  const existingPickr = document.querySelector('.pickr');
-	  if (existingPickr) return; // prevent multiple pickers
-
-	  const pickr = Pickr.create({
-		el: colorBtn, // mount on the actual button
-		theme: 'nano',
-		default: tier.color,
-		swatches: [
-		  '#FF7F7F', '#FFDF7F', '#FFBF7F',
-		  '#FFFF7F', '#BFFF7F', '#7FFF7F',
-		  '#7FFFFF', '#7FBFFF', '#7F7FFF',
-		  '#FF7FFF', '#BF7FBF', '#3B3B3B',
-		  '#858585', '#CFCFCF', '#F7F7F7'
-		],
-		components: {
-		  preview: true,
-		  opacity: true,
-		  hue: true,
-		  interaction: {
-			hex: true,
-			rgba: true,
-			input: true,
-			clear: true,
-			save: true
-		  }
-		}
-	  });
-
-	  pickr.show();
-
-	  pickr.on('save', (color) => {
-		tier.color = color.toHEXA().toString();
-		pickr.destroyAndRemove();
-		render();
-		saveToLocal();
-	  });
-
-	  pickr.on('clear', () => pickr.destroyAndRemove());
-	  pickr.on('hide', () => pickr.destroyAndRemove());
-	};
-
-
+	
+    const colorPickerContainer = document.createElement('div');
+	colorPickerContainer.className = 'color-picker-container';
 
     const addAboveBtn = document.createElement('button');
     addAboveBtn.textContent = '＋↑';
@@ -318,7 +275,7 @@ function render() {
     };
 
     controls.appendChild(addAboveBtn);
-    controls.appendChild(colorBtn);
+    controls.appendChild(colorPickerContainer);
 	controls.appendChild(addBelowBtn);
     controls.appendChild(deleteBtn);
 
@@ -328,6 +285,44 @@ function render() {
     tierDiv.appendChild(controls);
 
     tiersContainer.appendChild(tierDiv);
+	
+	    const pickr = Pickr.create({
+	  el: colorPickerContainer,
+	  theme: 'nano',
+	  default: tier.color,
+	  swatches: [
+	    '#FF7F7F', '#FFDF7F', '#FFBF7F',
+	    '#FFFF7F', '#BFFF7F', '#7FFF7F',
+	    '#7FFFFF', '#7FBFFF', '#7F7FFF',
+	    '#FF7FFF', '#BF7FBF', '#3B3B3B',
+	    '#858585', '#CFCFCF', '#F7F7F7'
+	  ],
+	  useAsButton: false,
+	  components: {
+	    preview: true,
+	    opacity: false,
+	    hue: true,
+	    interaction: {
+	  	hex: true,
+	  	rgba: true,
+	  	input: true,
+	  	clear: false,
+	  	save: false
+	    }
+	  }
+    });
+
+	  pickr.on('change', (color) => {
+		  clearTimeout(updateColorTimeout);
+		  updateColorTimeout = setTimeout(() => {
+			if (color) {
+			  tier.color = color.toHEXA().toString();
+			  render();
+			  saveToLocal();
+			}
+		  }, 50); // Adjust delay as needed
+		});
+
   });
 
   pool.forEach(item => {
