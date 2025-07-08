@@ -14,10 +14,32 @@
 
 <div id="image-pool" title="Image Pool (Drag images from here to tiers)"></div>
 
+<div id="export-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Export Tierlist</h2>
+      <span class="modal-close" title="Close">&times;</span>
+    </div>
+	<img id="exportPreviewImage" style="max-width: 100%; max-height: 300px; display: block; margin-bottom: 10px;" alt="Export preview" />
+	<label>
+	  Scale:
+	  <input type="number" id="exportScale" min="1" max="10" step="1" value="1" />
+	</label>
+	<label>
+	  <input type="checkbox" id="exportTransparent" />
+	  Transparent Background
+	</label>
+    <div class="modal-body">
+      <button id="download-png">Download</button>
+    </div>
+  </div>
+</div>
+
 
 
 <div id="controls">
   <button id="imageAdder">Add Images</button>
+  <button id="exportImageBtn">Save an Image</button>
   <button id="export-btn">Export JSON</button>
   <button id="import-btn">Import JSON</button>
   <button id="reset-btn">Reset</button>
@@ -30,6 +52,9 @@
 
 <!-- Pickr JS -->
 <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+
 
 <script src="app.js"></script>
 </body>
