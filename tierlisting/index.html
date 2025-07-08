@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tierlist Style Update</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="tiers"></div>
+
+<div id="image-pool" title="Image Pool (Drag images from here to tiers)"></div>
+
+
+
+<div id="controls">
+  <button id="imageAdder">Add Images</button>
+  <button id="export-btn">Export JSON</button>
+  <button id="import-btn">Import JSON</button>
+  <button id="reset-btn">Reset</button>
+  <input type="file" id="imageLoader" style="display:none" multiple accept="image/*" title="Load Images" />
+  <input type="file" id="import-json" style="display:none" accept="application/json" />
+</div>
+
+<!-- Pickr CSS (Nano theme) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" />
+
+<!-- Pickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr"></script>
+
+<script src="app.js"></script>
+</body>
+</html>

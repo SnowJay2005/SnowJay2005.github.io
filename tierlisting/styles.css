@@ -1,0 +1,255 @@
+html, body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f9f9f9;
+  height: auto;
+  overflow-y: auto;
+  display: block;
+}
+
+#tiers {
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  padding: 8px 10px;
+}
+
+.tier {
+  display: flex;
+  width: 100%;
+  border-bottom: 1px solid black;
+  min-height: 80px;
+  position: relative;
+}
+
+.tier:last-child {
+  border-bottom: none;
+}
+
+.tier-label {
+  width: 100px;
+  background-color: #888;
+  color: black;
+  display: flex;
+  align-items: center;         /* vertical center */
+  justify-content: center;     /* horizontal center */
+  padding: 8px;
+  position: relative;
+  box-sizing: border-box;
+  user-select: none;
+  text-align: center;
+  min-height: 100%;
+}
+
+.tier-label textarea {
+  all: unset;
+  resize: none;
+  width: 100%;
+  height: auto;
+  min-height: 1.2em;
+  font-size: 1rem;
+  font-weight: 400;
+  font-family: inherit;
+  color: black;
+  text-align: center;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  line-height: 1.2;
+  box-sizing: border-box;
+  cursor: text;
+  display: block;
+}
+
+.tier-items-container {
+  flex: 1;
+  background-color: #2f2f2f;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 0;
+  gap: 0;
+  overflow: visible;
+  min-height: 80px;
+  position: relative;
+}
+
+.item {
+  width: 80px;
+  height: 80px;
+  position: relative;
+  user-select: none;
+}
+
+.item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.item.dragging {
+  opacity: 0.5;
+}
+
+/* Left insertion line */
+.item.insertion-before::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: #06f;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Right insertion line */
+.item.insertion-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  background: #06f;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#image-pool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 8px 10px;
+  gap: 0;
+  background: transparent;
+  min-height: 80px;
+  border-top: 2px solid #ccc;
+  width: 100%;
+  overflow: visible;
+}
+
+#controls {
+padding: 8px 10px;
+background: #ddd;
+border-top: 2px solid #ccc;
+display: flex;
+gap: 10px;
+flex-shrink: 0;
+}
+
+button {
+padding: 6px 12px;
+border: none;
+border-radius: 4px;
+background: #4287f5;
+color: white;
+cursor: pointer;
+font-size: 1em;
+}
+button:hover {
+background: #306cd2;
+}
+
+#imageLoader {
+background: #4287f5;
+color: white;
+font-size: 1em;
+padding: 6px 12px;
+border: none;
+border-radius: 4px;
+cursor: pointer;
+}
+
+.grab-handle {
+width: 30px;
+display: flex;
+align-items: center;
+justify-content: center;
+background-color: #444;
+color: white;
+font-size: 1.5rem;
+cursor: grab;
+user-select: none;
+}
+.grab-handle:active {
+cursor: grabbing;
+}
+
+.tier-insert-before::before {
+content: '';
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 4px;
+background-color: #06f;
+z-index: 1000;
+pointer-events: none;
+}
+
+.tier-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px;
+  gap: 4px;
+  background: #eee;
+  border-left: 1px solid #ccc;
+  min-width: 40px;
+}
+
+.tier-actions {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  gap: 4px 8px;
+  padding: 4px 8px;
+  align-items: center;
+  justify-content: space-between;
+  background: #eee;
+  border-left: 1px solid #ccc;
+  min-width: fit-content;
+}
+
+.tier-actions button {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #ccc;
+  color: #000;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.tier-actions button:hover {
+  background: #bbb;
+}
+
+.tier-actions button:active {
+  background: #aaa;
+}
+
+.pickr-trigger {
+  display: none;
+}
+.pickr .pcr-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 180px; /* or more if you want */
+  gap: 4px;
+}
+
