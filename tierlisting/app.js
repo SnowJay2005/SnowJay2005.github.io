@@ -5,7 +5,9 @@ const imageAdder = document.getElementById('imageAdder')
 const exportBtn = document.getElementById('export-btn');
 const importBtn = document.getElementById('import-btn');
 const importJsonInput = document.getElementById('import-json');
+const pinToggleBtn = document.getElementById('pinToggleBtn');
 let updateColorTimeout = null;
+let pinned = false;
 
 let tiers = [];
 let pool = [];
@@ -459,6 +461,12 @@ exportBtn.onclick = () => {
 
 importBtn.onclick = () => importJsonInput.click();
 imageAdder.onclick = () => imageLoader.click();
+
+pinToggleBtn.onclick = () => {
+  pinned = !pinned;
+  document.body.classList.toggle('pool-pinned', pinned);
+  pinToggleBtn.textContent = pinned ? '📌 Unpin' : '📌 Pin';
+};
 
 importJsonInput.addEventListener('change', e => {
   const file = e.target.files[0];

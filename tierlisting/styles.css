@@ -272,3 +272,24 @@ pointer-events: none;
   padding: 0 !important;
   box-shadow: none !important;
 }
+
+body.pool-pinned #image-pool {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #222;
+  padding: 0px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+  border-top: 2px solid #ccc;
+}
+
+body.pool-pinned {
+  padding-bottom: 180px; /* Prevent content being hidden under pinned pool */
+}
+
+#image-pool {
+  transition: all 0.3s ease;
+}
