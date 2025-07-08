@@ -209,6 +209,13 @@ function render() {
     });
     nameTextarea.rows = 1;
     labelDiv.appendChild(nameTextarea);
+	
+	// 👇 Make sure it resizes AFTER it's added to DOM
+	requestAnimationFrame(() => {
+	  nameTextarea.style.height = 'auto';
+	  nameTextarea.style.height = nameTextarea.scrollHeight + 'px';
+	});
+	
 
     const itemsContainer = document.createElement('div');
     itemsContainer.className = 'tier-items-container';
