@@ -35,6 +35,16 @@
   </div>
 </div>
 
+<div id="rename-modal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Rename Item(s)</h3>
+    <input id="rename-input" type="text" style="width: 100%; margin-bottom: 10px;" />
+    <div>
+      <button id="rename-confirm">OK</button>
+      <button id="rename-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 
 <div id="controls">
@@ -42,7 +52,11 @@
   <button id="exportImageBtn">Save an Image</button>
   <button id="export-btn">Export JSON</button>
   <button id="import-btn">Import JSON</button>
-  <button id="reset-btn">Reset</button>
+  <!-- Right-aligned group -->
+  <div class="controls-right">
+    <button id="reset-btn" class="danger-button">Reset</button>
+    <div id="trash-button" title="Drag here to delete" class="drop-trash">🗑️</div>
+  </div>
   <input type="file" id="imageLoader" style="display:none" multiple accept="image/*" title="Load Images" />
   <input type="file" id="import-json" style="display:none" accept="application/json" />
 </div>

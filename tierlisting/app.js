@@ -11,6 +11,7 @@ const modal = document.getElementById('export-modal');
 const closeModalBtn = document.querySelector('.modal-close');
 const downloadPngBtn = document.getElementById('download-png');
 const downloadJpgBtn = document.getElementById('download-jpg');
+const trashButton = document.getElementById('trash-button');
 let updateColorTimeout = null;
 let pinned = false;
 
@@ -455,7 +456,7 @@ function render() {
 		}
 	  }
 	  dragState.draggingItemId = id;
-	  dragState.fromTierId = tier.id;  // or null if pool item
+	  dragState.fromTierId = null;  // or null if pool item
 	  dragState.draggingElement = itemDiv;
 	  e.dataTransfer.effectAllowed = 'move';
 	  itemDiv.classList.add('dragging');
@@ -636,6 +637,46 @@ pinToggleBtn.onclick = () => {
   pinToggleBtn.textContent = pinned ? '📌 Unpin' : '📌 Pin';
 };
 
+trashButton.addEventListener('dragover', e => {
+  e.preventDefault();
+  trashButton.classList.add('drag-over-trash');
+});
+
+trashButton.addEventListener('dragleave', () => {
+  trashButton.classList.remove('drag-over-trash');
+});
+
+trashButton.addEventListener('drop', e => {
+  e.preventDefault();
+  trashButton.classList.remove('drag-over-trash');
+
+  if (!selectedItemIds.size) return;
+
+  const confirmed = confirm(`Delete ${selectedItemIds.size} item(s)? This cannot be undone.`);
+  if (!confirmed) return;
+
+  // Delete from pool
+  for (let i = pool.length - 1; i >= 0; i--) {
+    if (selectedItemIds.has(pool[i].id)) {
+      pool.splice(i, 1);
+    }
+  }
+
+  // Delete from tiers
+  for (const tier of tiers) {
+    for (let i = tier.items.length - 1; i >= 0; i--) {
+      if (selectedItemIds.has(tier.items[i].id)) {
+        tier.items.splice(i, 1);
+      }
+    }
+  }
+
+  selectedItemIds.clear();
+  lastSelectedItemId = null;
+  render();
+  saveToLocal();
+});
+
 exportImageBtn.onclick = () => {
   modal.classList.remove('hidden');
   generateExportPreview();
@@ -797,10 +838,79 @@ importJsonInput.addEventListener('change', e => {
   reader.readAsText(file);
 });
 
+function loadImagesFromFiles(files) {
+  const promises = Array.from(files).map(file => new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const name = file.name.split('.').slice(0, -1).join('.');
+      pool.push(createItem(ev.target.result, null, name));
+      resolve();
+    };
+    reader.readAsDataURL(file);
+  }));
+
+  return Promise.all(promises).then(() => {
+    render();
+    saveToLocal();
+  });
+}
+
 imageLoader.addEventListener('change', e => {
   const files = e.target.files;
   if (!files.length) return;
-  const promises = Array.from(files).map(file => new Promise(resolve => {
+  loadImagesFromFiles(files);
+});
+
+// Create overlay element
+const dropOverlay = document.createElement('div');
+dropOverlay.style.position = 'fixed';
+dropOverlay.style.top = 0;
+dropOverlay.style.left = 0;
+dropOverlay.style.width = '100%';
+dropOverlay.style.height = '100%';
+dropOverlay.style.background = 'rgba(0,0,0,0.6)';
+dropOverlay.style.color = '#fff';
+dropOverlay.style.display = 'flex';
+dropOverlay.style.alignItems = 'center';
+dropOverlay.style.justifyContent = 'center';
+dropOverlay.style.fontSize = '32px';
+dropOverlay.style.zIndex = 9999;
+dropOverlay.style.pointerEvents = 'none';
+dropOverlay.style.opacity = 0;
+dropOverlay.style.transition = 'opacity 0.2s ease';
+dropOverlay.textContent = 'Drop to upload images';
+document.body.appendChild(dropOverlay);
+
+// Track drag state
+let dragCounter = 0;
+
+document.addEventListener('dragenter', e => {
+  dragCounter++;
+  if (e.dataTransfer?.types.includes('Files')) {
+    dropOverlay.style.opacity = 1;
+  }
+});
+
+document.addEventListener('dragleave', e => {
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dropOverlay.style.opacity = 0;
+  }
+});
+
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+});
+
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  dropOverlay.style.opacity = 0;
+  dragCounter = 0;
+
+  const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+  if (files.length === 0) return;
+
+  const promises = files.map(file => new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = ev => {
       const name = file.name.split('.').slice(0, -1).join('.');
@@ -816,4 +926,130 @@ imageLoader.addEventListener('change', e => {
   });
 });
 
+function setupItemContextMenu() {
+  document.addEventListener('contextmenu', e => {
+    const itemDiv = e.target.closest('.item');
+    if (!itemDiv) return;
+
+    e.preventDefault();
+    const itemId = itemDiv.dataset.itemId;
+
+    if (!selectedItemIds.has(itemId)) {
+      selectedItemIds.clear();
+      selectedItemIds.add(itemId);
+      lastSelectedItemId = itemId;
+    }
+
+    showItemContextMenu(e.pageX, e.pageY);
+  });
+
+  document.addEventListener('pointerdown', e => {
+    const isInMenu = e.target.closest('.custom-context-menu');
+    const isContextClick = e.button === 2; // right-click
+    if (!isInMenu && !isContextClick) {
+      removeContextMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') removeContextMenu();
+  });
+}
+
+function showItemContextMenu(x, y) {
+  removeContextMenu(); // Ensure only one exists
+
+  const menu = document.createElement('div');
+  menu.className = 'custom-context-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  const renameBtn = document.createElement('div');
+  renameBtn.className = 'context-menu-option';
+  renameBtn.textContent = '📝 Rename';
+  renameBtn.onclick = () => {
+    showRenameModal(Array.from(selectedItemIds));
+    removeContextMenu();
+  };
+  
+  const deleteOption = document.createElement('div');
+  deleteOption.className = 'context-menu-option delete';
+  deleteOption.textContent = '🗑️ Delete';
+  deleteOption.addEventListener('click', () => {
+    removeContextMenu();
+    if (confirm(`Delete ${selectedItemIds.size} image(s)?`)) {
+      for (const id of selectedItemIds) {
+        // Try to delete from tiers
+        for (const tier of tiers) {
+          const index = tier.items.findIndex(item => item.id === id);
+          if (index !== -1) {
+            tier.items.splice(index, 1);
+          }
+        }
+
+        // Try to delete from pool
+        const poolIndex = pool.findIndex(item => item.id === id);
+        if (poolIndex !== -1) {
+          pool.splice(poolIndex, 1);
+        }
+      }
+      selectedItemIds.clear();
+      render();
+      saveToLocal();
+    }
+  });
+
+
+  menu.appendChild(renameBtn);
+  menu.appendChild(deleteOption);
+
+  document.body.appendChild(menu);
+}
+
+function removeContextMenu() {
+  const existing = document.querySelector('.custom-context-menu');
+  if (existing) existing.remove();
+}
+
+function showRenameModal(itemIds) {
+  const modal = document.createElement('div');
+  modal.className = 'rename-modal-overlay';
+  modal.innerHTML = `
+    <div class="rename-modal">
+      <h3>Rename ${itemIds.length > 1 ? 'Items' : 'Item'}</h3>
+      <textarea class="rename-textarea">${itemIds.map(id => findItemById(id)?.name || '').join(', ')}</textarea>
+      <div class="rename-buttons">
+        <button class="rename-confirm">Rename</button>
+        <button class="rename-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector('.rename-cancel').onclick = () => modal.remove();
+
+  modal.querySelector('.rename-confirm').onclick = () => {
+    const inputText = modal.querySelector('.rename-textarea').value;
+    const newNames = inputText.split(',').map(n => n.trim());
+    itemIds.forEach((id, idx) => {
+      const item = findItemById(id);
+      if (item && newNames[idx]) item.name = newNames[idx];
+    });
+    modal.remove();
+    render();
+    saveToLocal();
+  };
+}
+
+function findItemById(id) {
+  for (const tier of tiers) {
+    const item = tier.items.find(i => i.id === id);
+    if (item) return item;
+  }
+  return pool.find(i => i.id === id) || null;
+}
+
+
+
 loadFromLocal();
+setupItemContextMenu();
