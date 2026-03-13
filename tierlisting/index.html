@@ -4,72 +4,107 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Tierlisting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-<div id="tiers"></div>
+<header id="app-header">
+  <div id="header-left">
+    <span id="app-title">TIER<span class="accent">LIST</span></span>
+  </div>
+  <div id="header-right">
+    <button id="imageAdder" class="hdr-btn" title="Add Images">+ Images</button>
+    <button id="exportImageBtn" class="hdr-btn" title="Export as PNG">Export PNG</button>
+    <button id="export-btn" class="hdr-btn" title="Export JSON">Export JSON</button>
+    <button id="import-btn" class="hdr-btn" title="Import JSON">Import JSON</button>
+    <button id="reset-btn" class="hdr-btn danger" title="Reset">Reset</button>
+  </div>
+</header>
 
-<button id="pinToggleBtn">📌 Pin</button>
+<main id="app-body">
+  <div id="tiers"></div>
+  <div id="add-tier-row">
+    <button id="add-tier-btn">+ Add Tier</button>
+  </div>
+</main>
 
-<div id="image-pool" title="Image Pool (Drag images from here to tiers)"></div>
+<div id="pool-wrapper">
+  <div id="pool-header">
+    <span id="pool-title">Image Pool</span>
+    <div id="pool-header-right">
+      <label class="fit-toggle">
+        <input type="checkbox" id="fitToggle" />
+        <span>Fit mode</span>
+      </label>
+      <button id="pinToggleBtn" class="hdr-btn small">📌 Pin</button>
+    </div>
+  </div>
+  <div id="image-pool"></div>
+</div>
 
+<!-- Trash -->
+<div id="trash-button" title="Drag here to delete">🗑</div>
+
+<!-- Export modal -->
 <div id="export-modal" class="modal hidden">
   <div class="modal-content">
     <div class="modal-header">
       <h2>Export Tierlist</h2>
-      <span class="modal-close" title="Close">&times;</span>
+      <button class="modal-close">✕</button>
     </div>
-	<img id="exportPreviewImage" style="max-width: 100%; max-height: 300px; display: block; margin-bottom: 10px;" alt="Export preview" />
-	<label>
-	  Scale:
-	  <input type="number" id="exportScale" min="1" max="10" step="1" value="1" />
-	</label>
-	<label>
-	  <input type="checkbox" id="exportTransparent" />
-	  Transparent Background
-	</label>
-    <div class="modal-body">
-      <button id="download-png">Download</button>
+    <img id="exportPreviewImage" alt="Export preview" />
+    <div class="modal-options">
+      <label>Scale: <input type="number" id="exportScale" min="1" max="4" step="1" value="2" /></label>
+      <label><input type="checkbox" id="exportTransparent" /> Transparent background</label>
     </div>
+    <button id="download-png" class="big-btn">Download PNG</button>
   </div>
 </div>
 
+<!-- Group name modal -->
+<div id="group-modal" class="modal hidden">
+  <div class="modal-content narrow">
+    <div class="modal-header">
+      <h2>Create Group</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <input type="text" id="group-name-input" placeholder="Group name..." />
+    <button id="group-confirm-btn" class="big-btn">Create Group</button>
+  </div>
+</div>
+
+<!-- Rename modal -->
 <div id="rename-modal" class="modal hidden">
-  <div class="modal-content">
-    <h3>Rename Item(s)</h3>
-    <input id="rename-input" type="text" style="width: 100%; margin-bottom: 10px;" />
-    <div>
-      <button id="rename-confirm">OK</button>
-      <button id="rename-cancel">Cancel</button>
+  <div class="modal-content narrow">
+    <div class="modal-header">
+      <h2 id="rename-modal-title">Rename</h2>
+      <button class="modal-close">✕</button>
     </div>
+    <textarea id="rename-input" rows="3"></textarea>
+    <button id="rename-confirm" class="big-btn">Rename</button>
   </div>
 </div>
 
-
-<div id="controls">
-  <button id="imageAdder">Add Images</button>
-  <button id="exportImageBtn">Save an Image</button>
-  <button id="export-btn">Export JSON</button>
-  <button id="import-btn">Import JSON</button>
-  <!-- Right-aligned group -->
-  <div class="controls-right">
-    <button id="reset-btn" class="danger-button">Reset</button>
-    <div id="trash-button" title="Drag here to delete" class="drop-trash">🗑️</div>
-  </div>
-  <input type="file" id="imageLoader" style="display:none" multiple accept="image/*" title="Load Images" />
-  <input type="file" id="import-json" style="display:none" accept="application/json" />
+<!-- Context menu -->
+<div id="context-menu" class="hidden">
+  <div class="ctx-option" data-action="rename">✏️ Rename</div>
+  <div class="ctx-option" data-action="group">📁 Group selected</div>
+  <div class="ctx-option" data-action="ungroup">📂 Ungroup</div>
+  <div class="ctx-option" data-action="recolor" style="display:none">🎨 Change color</div>
+  <div class="ctx-option danger" data-action="delete">🗑 Delete</div>
 </div>
 
-<!-- Pickr CSS (Nano theme) -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" />
+<!-- Drop overlay -->
+<div id="drop-overlay">Drop images to add</div>
 
-<!-- Pickr JS -->
+<input type="file" id="imageLoader" style="display:none" multiple accept="image/*" />
+<input type="file" id="import-json" style="display:none" accept="application/json" />
+
 <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr"></script>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
-
-
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,1055 +1,1466 @@
-const tiersContainer = document.getElementById('tiers');
-const poolItems = document.getElementById('image-pool');
-const imageLoader = document.getElementById('imageLoader');
-const imageAdder = document.getElementById('imageAdder');
-const exportBtn = document.getElementById('export-btn');
-const importBtn = document.getElementById('import-btn');
-const importJsonInput = document.getElementById('import-json');
-const pinToggleBtn = document.getElementById('pinToggleBtn');
-const exportImageBtn = document.getElementById('exportImageBtn');
-const modal = document.getElementById('export-modal');
-const closeModalBtn = document.querySelector('.modal-close');
-const downloadPngBtn = document.getElementById('download-png');
-const downloadJpgBtn = document.getElementById('download-jpg');
-const trashButton = document.getElementById('trash-button');
-let updateColorTimeout = null;
-let pinned = false;
+// ── DB ──────────────────────────────────────────────────────────────────────
+const DB_NAME = 'TierlistDB_v1';
+const IMG_STORE = 'images';
+let dbInstance = null;
+
+function getDB() {
+  if (dbInstance) return Promise.resolve(dbInstance);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IMG_STORE)) {
+        db.createObjectStore(IMG_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => { dbInstance = req.result; resolve(dbInstance); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveImage(id, src) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IMG_STORE, 'readwrite');
+    tx.objectStore(IMG_STORE).put({ id, src });
+    tx.oncomplete = resolve;
+    tx.onerror = reject;
+  });
+}
+
+async function getImage(id) {
+  const db = await getDB();
+  return new Promise((resolve) => {
+    const req = db.transaction(IMG_STORE).objectStore(IMG_STORE).get(id);
+    req.onsuccess = () => resolve(req.result?.src || null);
+    req.onerror = () => resolve(null);
+  });
+}
+
+async function deleteImage(id) {
+  const db = await getDB();
+  return new Promise(resolve => {
+    const tx = db.transaction(IMG_STORE, 'readwrite');
+    tx.objectStore(IMG_STORE).delete(id);
+    tx.oncomplete = resolve;
+  });
+}
+
+async function getAllImages() {
+  const db = await getDB();
+  return new Promise(resolve => {
+    const req = db.transaction(IMG_STORE).objectStore(IMG_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+  });
+}
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+// Tier: { id, name, color, items: [ ItemRef | GroupRef ] }
+// ItemRef: { type:'item', id, name }
+// GroupRef: { type:'group', id, name, color, collapsed, items: [ItemRef] }
 
 let tiers = [];
-let pool = [];
-let dragState = {
-  draggingItemId: null,
-  fromTierId: null,
-  draggingElement: null,
-  dragOverElement: null,
-  insertBeforeItemId: null,
-  insertBeforeTierId: null,
+let pool = []; // [ ItemRef | GroupRef ]
+let selectedIds = new Set(); // item ids only
+let lastSelectedId = null;
+let fitMode = false;
+let poolPinned = true;
+
+const GROUP_COLORS = [
+  '#5b8cff','#ff5f7e','#ffca3a','#8ac926','#6a4c93',
+  '#ff9f1c','#2ec4b6','#e71d36','#b5e48c','#f77f00'
+];
+let groupColorIdx = 0;
+
+// ── RENDER LOCK & IMAGE CACHE ─────────────────────────────────────────────────
+let isRendering = false;
+let renderPending = false;
+const imageCache = new Map(); // id -> src
+
+async function getCachedImage(id) {
+  if (imageCache.has(id)) return imageCache.get(id);
+  const src = await getImage(id);
+  if (src) imageCache.set(id, src);
+  return src || '';
+}
+
+async function render() {
+  if (isRendering) { renderPending = true; return; }
+  isRendering = true;
+  renderPending = false;
+
+  const tiersEl = document.getElementById('tiers');
+  const poolEl = document.getElementById('image-pool');
+
+  // Preserve scroll position across render
+  const scrollY = document.body.scrollTop;
+  const poolScrollY = getPoolScrollEl()?.scrollTop || 0;
+
+  tiersEl.innerHTML = '';
+  poolEl.innerHTML = '';
+
+  for (const tier of tiers) {
+    tiersEl.appendChild(await buildTierEl(tier));
+  }
+  for (const ref of pool) {
+    const els = await buildRefEls(ref, null);
+    els.forEach(el => poolEl.appendChild(el));
+  }
+
+  // Pool accepts item and group drops
+  poolEl.ondragover = e => { if (drag.type === 'item' || drag.type === 'group') e.preventDefault(); };
+  poolEl.ondrop = e => {
+    e.preventDefault();
+    if (drag.type === 'item') dropItems([...selectedIds], null, drag.insertBeforeId, drag.insertAfter, null);
+    else if (drag.type === 'group') dropGroup(drag.id, null, drag.insertBeforeId, drag.insertAfter);
+  };
+
+  isRendering = false;
+  if (renderPending) render();
+
+  // Restore scroll and fix textarea heights
+  requestAnimationFrame(() => {
+    document.body.scrollTop = scrollY;
+    const pe = getPoolScrollEl();
+    if (pe) pe.scrollTop = poolScrollY;
+    document.querySelectorAll('.tier-label textarea').forEach(ta => {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+  });
+}
+
+// Re-render just one tier's items container (fast path for group toggle)
+async function rerenderTierItems(tierId) {
+  const container = tierId === null
+    ? document.getElementById('image-pool')
+    : document.querySelector(`.tier-items-container[data-tier-id="${tierId}"]`);
+  if (!container) { render(); return; }
+
+  const scrollY = document.body.scrollTop;
+  const poolScrollY = getPoolScrollEl()?.scrollTop || 0;
+  container.innerHTML = '';
+
+  const refs = tierId === null ? pool : (tiers.find(t => t.id === tierId)?.items || []);
+  for (const ref of refs) {
+    const els = await buildRefEls(ref, tierId);
+    els.forEach(el => container.appendChild(el));
+  }
+
+  requestAnimationFrame(() => {
+    document.body.scrollTop = scrollY;
+    const pe = getPoolScrollEl();
+    if (pe) pe.scrollTop = poolScrollY;
+  });
+  saveState();
+}
+
+// ── DRAG STATE ───────────────────────────────────────────────────────────────
+const drag = {
+  type: null,         // 'item' | 'tier'
+  id: null,           // item id or tier id
+  fromTierId: null,   // null = pool
+  fromGroupId: null,
+  insertBeforeId: null,
   insertAfter: false,
-  draggingTierId: null,
-  dragOverTierElement: null,
-  insertBeforeTierIdForTier: null,
+  insertTierBeforeId: null,
+  el: null,
 };
 
-// NEW: Keep track of selected items for multi-select
-const selectedItemIds = new Set();
-let lastSelectedItemId = null;
+function getPoolScrollEl() {
+  return document.getElementById('image-pool');
+}
 
-function createTier(name = 'New Tier', color = '#8888ff', items = []) {
+function resetDrag() {
+  drag.type = null; drag.id = null; drag.fromTierId = null;
+  drag.fromGroupId = null; drag.insertBeforeId = null;
+  drag.insertAfter = false; drag.insertTierBeforeId = null;
+  drag.el?.classList.remove('dragging');
+  drag.el = null;
+  clearInsertionMarkers();
+}
+
+// ── PERSISTENCE ──────────────────────────────────────────────────────────────
+function saveState() {
+  try {
+    localStorage.setItem('tierlistState_v2', JSON.stringify({ tiers, pool, fitMode, poolPinned }));
+  } catch(e) { console.warn('Save failed:', e); }
+}
+
+async function loadState() {
+  // Try new format
+  const raw = localStorage.getItem('tierlistState_v2');
+  if (raw) {
+    try {
+      const d = JSON.parse(raw);
+      tiers = d.tiers || [];
+      pool = d.pool || [];
+      fitMode = d.fitMode || false;
+      poolPinned = d.poolPinned !== false;
+      applyFitMode();
+      applyPoolPin();
+      await render();
+      return;
+    } catch(e) { console.warn('New state load failed:', e); }
+  }
+
+  // Try old format (migration)
+  const oldRaw = localStorage.getItem('tierlistData');
+  if (oldRaw) {
+    try {
+      const d = JSON.parse(oldRaw);
+      // Old format had base64 in item.src, items had id/src/name
+      const oldTiers = d.tiers || [];
+      const oldPool = d.pool || [];
+
+      tiers = [];
+      pool = [];
+
+      for (const ot of oldTiers) {
+        const newItems = [];
+        for (const oi of (ot.items || [])) {
+          const id = oi.id || crypto.randomUUID();
+          if (oi.src) await saveImage(id, oi.src);
+          newItems.push({ type: 'item', id, name: oi.name || '' });
+        }
+        tiers.push({ id: ot.id || crypto.randomUUID(), name: ot.name, color: ot.color || '#888', items: newItems });
+      }
+
+      for (const oi of oldPool) {
+        const id = oi.id || crypto.randomUUID();
+        if (oi.src) await saveImage(id, oi.src);
+        pool.push({ type: 'item', id, name: oi.name || '' });
+      }
+
+      saveState();
+      await render();
+      return;
+    } catch(e) { console.warn('Migration failed:', e); }
+  }
+
+  // Fresh start
+  tiers = [
+    makeTier('S', '#ff7f7f'),
+    makeTier('A', '#ffbf7f'),
+    makeTier('B', '#ffdf7f'),
+    makeTier('C', '#ffff7f'),
+    makeTier('D', '#bfff7f'),
+  ];
+  pool = [];
+  saveState();
+  await render();
+}
+
+// ── FACTORIES ────────────────────────────────────────────────────────────────
+function makeTier(name = 'New Tier', color = '#8888ff', items = []) {
   return { id: crypto.randomUUID(), name, color, items };
 }
 
-function createItem(src, id = null, name = null) {
-  return { id: id || crypto.randomUUID(), src, name };
+function makeItem(name = '') {
+  return { type: 'item', id: crypto.randomUUID(), name };
 }
 
-function saveToLocal() {
-  localStorage.setItem('tierlistData', JSON.stringify({ tiers, pool }));
+function makeGroup(name = 'Group', color = null, items = []) {
+  const c = color || GROUP_COLORS[groupColorIdx++ % GROUP_COLORS.length];
+  return { type: 'group', id: crypto.randomUUID(), name, color: c, collapsed: false, items };
 }
 
-function loadFromLocal() {
-  const data = localStorage.getItem('tierlistData');
-  if (data) {
-    try {
-      const parsed = JSON.parse(data);
-      tiers = parsed.tiers || [];
-      pool = parsed.pool || [];
-      render();
-    } catch {
-      alert('Failed to load saved tierlist data.');
+// ── LOOKUP HELPERS ───────────────────────────────────────────────────────────
+function findItemRef(itemId) {
+  // Returns { ref, container, containerType:'tier'|'pool'|'group', tierId, groupId }
+  for (const t of tiers) {
+    for (let i = 0; i < t.items.length; i++) {
+      const r = t.items[i];
+      if (r.type === 'item' && r.id === itemId)
+        return { ref: r, container: t.items, containerType: 'tier', tierId: t.id };
+      if (r.type === 'group') {
+        const gi = r.items.findIndex(gr => gr.id === itemId);
+        if (gi !== -1)
+          return { ref: r.items[gi], container: r.items, containerType: 'group', tierId: t.id, groupId: r.id };
+      }
     }
   }
-}
-
-function extractNameFromSrc(src) {
-  try {
-    const parts = src.split('/');
-    const filename = parts[parts.length - 1].split('?')[0];
-    const name = filename.split('.')[0];
-    return name;
-  } catch {
-    return 'Item';
+  for (let i = 0; i < pool.length; i++) {
+    const r = pool[i];
+    if (r.type === 'item' && r.id === itemId)
+      return { ref: r, container: pool, containerType: 'pool' };
+    if (r.type === 'group') {
+      const gi = r.items.findIndex(gr => gr.id === itemId);
+      if (gi !== -1)
+        return { ref: r.items[gi], container: r.items, containerType: 'group', groupId: r.id };
+    }
   }
+  return null;
 }
 
-function clearInsertionIndicators() {
-  document.querySelectorAll('.item.insertion-before, .item.insertion-after').forEach(el => {
-    el.classList.remove('insertion-before');
-    el.classList.remove('insertion-after');
+function findGroupRef(groupId) {
+  for (const t of tiers) {
+    const i = t.items.findIndex(r => r.type === 'group' && r.id === groupId);
+    if (i !== -1) return { ref: t.items[i], container: t.items, tierId: t.id };
+  }
+  const i = pool.findIndex(r => r.type === 'group' && r.id === groupId);
+  if (i !== -1) return { ref: pool[i], container: pool };
+  return null;
+}
+
+function removeFromContainer(id) {
+  // Remove an item or group ref from wherever it lives; returns the removed ref
+  for (const t of tiers) {
+    const i = t.items.findIndex(r => r.id === id);
+    if (i !== -1) return t.items.splice(i, 1)[0];
+    for (const r of t.items) {
+      if (r.type === 'group') {
+        const gi = r.items.findIndex(gr => gr.id === id);
+        if (gi !== -1) return r.items.splice(gi, 1)[0];
+      }
+    }
+  }
+  const pi = pool.findIndex(r => r.id === id);
+  if (pi !== -1) return pool.splice(pi, 1)[0];
+  for (const r of pool) {
+    if (r.type === 'group') {
+      const gi = r.items.findIndex(gr => gr.id === id);
+      if (gi !== -1) return r.items.splice(gi, 1)[0];
+    }
+  }
+  return null;
+}
+
+function getTargetContainer(tierId) {
+  if (tierId === null) return pool;
+  const t = tiers.find(t => t.id === tierId);
+  return t ? t.items : null;
+}
+
+
+
+async function buildTierEl(tier) {
+  const tierDiv = document.createElement('div');
+  tierDiv.className = 'tier';
+  tierDiv.dataset.tierId = tier.id;
+
+  // Grab handle
+  const handle = document.createElement('div');
+  handle.className = 'grab-handle';
+  handle.innerHTML = '⠿';
+  handle.draggable = true;
+  handle.addEventListener('dragstart', e => {
+    drag.type = 'tier';
+    drag.id = tier.id;
+    e.dataTransfer.effectAllowed = 'move';
   });
-  document.querySelectorAll('.tier.tier-insert-before').forEach(el => {
-    el.classList.remove('tier-insert-before');
+
+  // Label
+  const labelDiv = document.createElement('div');
+  labelDiv.className = 'tier-label';
+  labelDiv.style.backgroundColor = tier.color;
+  const ta = document.createElement('textarea');
+  ta.value = tier.name;
+  ta.rows = 1;
+  ta.addEventListener('input', () => {
+    tier.name = ta.value;
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+    saveState();
   });
-  dragState.insertBeforeItemId = null;
-  dragState.insertBeforeTierId = null;
-  dragState.insertAfter = false;
-  dragState.insertBeforeTierIdForTier = null;
-  dragState.dragOverTierElement = null;
-}
+  labelDiv.appendChild(ta);
 
-// --- NEW: Helper to clear selection ---
-function clearSelection() {
-  selectedItemIds.clear();
-  lastSelectedItemId = null;
-  render();
-}
+  // Items container
+  const itemsCont = document.createElement('div');
+  itemsCont.className = 'tier-items-container';
+  itemsCont.dataset.tierId = tier.id;
 
-// --- NEW: Helper to toggle selection on click ---
-function toggleSelection(itemId, event) {
-  const isCtrl = event.ctrlKey || event.metaKey; // cmd on Mac
-  const isShift = event.shiftKey;
+  setupDropZone(itemsCont, tier.id);
 
-  if (!isCtrl && !isShift) {
-    // Single select: clear others, select this
-    selectedItemIds.clear();
-    selectedItemIds.add(itemId);
-  } else if (isShift && lastSelectedItemId) {
-    // Select range between lastSelectedItemId and this one in the same container
-
-    // Find container: either pool or tier items
-    // We'll gather all item elements in the same container for ordering
-    const allItems = [...document.querySelectorAll('.item')];
-
-    // Get indexes of lastSelectedItemId and current itemId
-    const lastIndex = allItems.findIndex(el => el.dataset.itemId === lastSelectedItemId);
-    const currentIndex = allItems.findIndex(el => el.dataset.itemId === itemId);
-    if (lastIndex === -1 || currentIndex === -1) {
-      // fallback to just select clicked item
-      selectedItemIds.clear();
-      selectedItemIds.add(itemId);
-    } else {
-      const [start, end] = lastIndex < currentIndex ? [lastIndex, currentIndex] : [currentIndex, lastIndex];
-      selectedItemIds.clear();
-      for (let i = start; i <= end; i++) {
-        selectedItemIds.add(allItems[i].dataset.itemId);
-      }
-    }
-  } else if (isCtrl) {
-    // Toggle this item's selection
-    if (selectedItemIds.has(itemId)) {
-      selectedItemIds.delete(itemId);
-    } else {
-      selectedItemIds.add(itemId);
-    }
+  for (const ref of tier.items) {
+    const els = await buildRefEls(ref, tier.id);
+    els.forEach(el => itemsCont.appendChild(el));
   }
-  lastSelectedItemId = itemId;
-  render();
-}
 
-function render() {
-  tiersContainer.innerHTML = '';
-  poolItems.innerHTML = '';
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'tier-actions';
 
-  tiers.forEach((tier, index) => {
-    const tierDiv = document.createElement('div');
-    tierDiv.className = 'tier';
-    tierDiv.dataset.tierId = tier.id;
+  const addAbove = document.createElement('button');
+  addAbove.innerHTML = '＋↑'; addAbove.title = 'Add tier above';
+  addAbove.onclick = () => {
+    const idx = tiers.findIndex(t => t.id === tier.id);
+    tiers.splice(idx, 0, makeTier());
+    saveState(); render();
+  };
 
-    tierDiv.addEventListener('dragover', e => {
-      e.preventDefault();
-      if (!dragState.draggingTierId) return;
+  const addBelow = document.createElement('button');
+  addBelow.innerHTML = '＋↓'; addBelow.title = 'Add tier below';
+  addBelow.onclick = () => {
+    const idx = tiers.findIndex(t => t.id === tier.id);
+    tiers.splice(idx + 1, 0, makeTier());
+    saveState(); render();
+  };
 
-      const rect = tierDiv.getBoundingClientRect();
-      const mouseY = e.clientY;
-      clearInsertionIndicators();
-      if (mouseY - rect.top < rect.height / 2) {
-        tierDiv.classList.add('tier-insert-before');
-        dragState.insertBeforeTierIdForTier = tier.id;
-      } else {
-        const nextSibling = tierDiv.nextElementSibling;
-        if (nextSibling) {
-          nextSibling.classList.add('tier-insert-before');
-          dragState.insertBeforeTierIdForTier = nextSibling.dataset.tierId;
-        } else {
-          dragState.insertBeforeTierIdForTier = null;
-        }
-      }
-      dragState.dragOverTierElement = tierDiv;
-    });
+  const delBtn = document.createElement('button');
+  delBtn.innerHTML = '✕'; delBtn.title = 'Delete tier'; delBtn.className = 'del-tier';
+  delBtn.onclick = async () => {
+    const confirmed = await showConfirm('Delete this tier? Items will go to the pool.');
+    if (!confirmed) return;
+    const t = tiers.find(t => t.id === tier.id);
+    if (t) {
+      for (const ref of t.items) pool.push(ref);
+      tiers.splice(tiers.indexOf(t), 1);
+    }
+    saveState(); render();
+  };
 
-    tierDiv.addEventListener('drop', e => {
-      e.preventDefault();
-      if (!dragState.draggingTierId) return;
+  const colorWrap = document.createElement('div');
+  colorWrap.className = 'color-picker-container';
+  actions.appendChild(addAbove);
+  actions.appendChild(colorWrap);
+  actions.appendChild(addBelow);
+  actions.appendChild(delBtn);
 
-      const fromIndex = tiers.findIndex(t => t.id === dragState.draggingTierId);
-      if (fromIndex === -1) return;
+  tierDiv.appendChild(handle);
+  tierDiv.appendChild(labelDiv);
+  tierDiv.appendChild(itemsCont);
+  tierDiv.appendChild(actions);
 
-      let toIndex = dragState.insertBeforeTierIdForTier ? tiers.findIndex(t => t.id === dragState.insertBeforeTierIdForTier) : tiers.length;
-      if (toIndex === -1) toIndex = tiers.length;
-      if (toIndex > fromIndex) toIndex--;
+  // Tier drag-over for reordering
+  tierDiv.addEventListener('dragover', e => {
+    if (drag.type !== 'tier') return;
+    e.preventDefault();
+    const rect = tierDiv.getBoundingClientRect();
+    clearInsertionMarkers();
+    if (e.clientY < rect.top + rect.height / 2) {
+      tierDiv.classList.add('drag-target-above');
+      drag.insertTierBeforeId = tier.id;
+    } else {
+      tierDiv.classList.add('drag-target-below');
+      drag.insertTierBeforeId = tier.id + '__below';
+    }
+  });
 
-      if (fromIndex !== toIndex) {
-        const [moved] = tiers.splice(fromIndex, 1);
-        tiers.splice(toIndex, 0, moved);
-        saveToLocal();
-      }
+  tierDiv.addEventListener('drop', e => {
+    if (drag.type !== 'tier' || !drag.id) return;
+    e.preventDefault();
+    const fromIdx = tiers.findIndex(t => t.id === drag.id);
+    if (fromIdx === -1) { resetDrag(); return; }
+    let toIdx;
+    if (!drag.insertTierBeforeId) {
+      toIdx = tiers.length;
+    } else if (drag.insertTierBeforeId.endsWith('__below')) {
+      const refId = drag.insertTierBeforeId.replace('__below', '');
+      toIdx = tiers.findIndex(t => t.id === refId) + 1;
+    } else {
+      toIdx = tiers.findIndex(t => t.id === drag.insertTierBeforeId);
+    }
+    if (toIdx < 0) toIdx = tiers.length;
+    const [moved] = tiers.splice(fromIdx, 1);
+    if (toIdx > fromIdx) toIdx--;
+    tiers.splice(toIdx, 0, moved);
+    saveState(); drag.id = null; resetDrag(); render();
+  });
 
-      dragState.draggingTierId = null;
-      clearInsertionIndicators();
-      render();
-    });
-
-    const grabHandle = document.createElement('div');
-    grabHandle.className = 'grab-handle';
-    grabHandle.textContent = '≡';
-    grabHandle.draggable = true;
-    grabHandle.addEventListener('dragstart', e => {
-      dragState.draggingTierId = tier.id;
-      e.dataTransfer.effectAllowed = 'move';
-    });
-
-    const labelDiv = document.createElement('div');
-    labelDiv.className = 'tier-label';
-    labelDiv.style.backgroundColor = tier.color;
-    const nameTextarea = document.createElement('textarea');
-    nameTextarea.value = tier.name;
-    nameTextarea.addEventListener('input', e => {
-      tier.name = e.target.value;
-      saveToLocal();
-      nameTextarea.style.height = 'auto'; // reset to recalculate
-      nameTextarea.style.height = nameTextarea.scrollHeight + 'px';
-    });
-    nameTextarea.rows = 1;
-    labelDiv.appendChild(nameTextarea);
-	
-	// 👇 Make sure it resizes AFTER it's added to DOM
-	requestAnimationFrame(() => {
-	  nameTextarea.style.height = 'auto';
-	  nameTextarea.style.height = nameTextarea.scrollHeight + 'px';
-	});
-	
-
-    const itemsContainer = document.createElement('div');
-    itemsContainer.className = 'tier-items-container';
-    itemsContainer.dataset.tierId = tier.id;
-
-    itemsContainer.addEventListener('dragover', e => e.preventDefault());
-    itemsContainer.addEventListener('drop', e => {
-      e.preventDefault();
-      if (!dragState.draggingItemId) return;
-
-      // Drop all selected items or just dragging one
-      const itemsToMove = selectedItemIds.has(dragState.draggingItemId)
-        ? [...selectedItemIds]
-        : [dragState.draggingItemId];
-
-      // We drop items in order on the tier
-      // Insert before ID is dragState.insertBeforeItemId, insertAfter flag too
-
-      // We'll insert all selected items before or after insertBeforeItemId,
-      // respecting the order
-
-      // First, remove all from their original places (handled in handleDropItems)
-      handleDropItems(itemsToMove, tier.id, dragState.insertBeforeItemId, dragState.insertAfter);
-
-      clearInsertionIndicators();
-    });
-
-    tier.items.forEach(item => {
-      const itemDiv = document.createElement('div');
-		itemDiv.className = 'item';
-		itemDiv.dataset.itemId = item.id;
-		itemDiv.draggable = true;
-		itemDiv.title = item.name || 'Untitled';
-
-		if (selectedItemIds.has(item.id)) {
-		  itemDiv.classList.add('selected');
-		}
-
-		itemDiv.addEventListener('click', e => {
-		  e.stopPropagation();
-		  toggleSelection(item.id, e);
-		});
-
-		itemDiv.addEventListener('dragstart', e => {
-		  const id = item.id;
-		  if (!selectedItemIds.has(id)) {
-			selectedItemIds.clear();
-			selectedItemIds.add(id);
-			lastSelectedItemId = id;
-			// Don't call render here!
-			// Instead, manually add "selected" class to this item only
-			document.querySelectorAll('.item.selected').forEach(el => el.classList.remove('selected'));
-			if (selectedItemIds.size > 1) {
-			  itemDiv.classList.add('selected');
-			} else {
-			  itemDiv.classList.remove('selected');
-			}
-		  }
-		  dragState.draggingItemId = id;
-		  dragState.fromTierId = tier.id;  // or null if pool item
-		  dragState.draggingElement = itemDiv;
-		  e.dataTransfer.effectAllowed = 'move';
-		  itemDiv.classList.add('dragging');
-		});
-
-		itemDiv.addEventListener('dragend', e => {
-		  dragState.draggingItemId = null;
-		  dragState.fromTierId = null;
-		  dragState.insertBeforeItemId = null;
-		  dragState.insertBeforeTierId = null;
-		  dragState.insertAfter = false;
-		  dragState.draggingElement?.classList.remove('dragging');
-		  dragState.draggingElement = null;
-		  clearInsertionIndicators();
-		  render();  // Now safe to rerender to update UI fully
-		});
-
-
-      itemDiv.addEventListener('dragover', e => {
-        e.preventDefault();
-        if (!dragState.draggingItemId || itemDiv === dragState.draggingElement) return;
-        const rect = itemDiv.getBoundingClientRect();
-        const mouseX = e.clientX;
-        clearInsertionIndicators();
-        if (mouseX - rect.left < rect.width / 2) {
-          itemDiv.classList.add('insertion-before');
-          dragState.insertBeforeItemId = item.id;
-          dragState.insertAfter = false;
-        } else {
-          itemDiv.classList.add('insertion-after');
-          dragState.insertBeforeItemId = item.id;
-          dragState.insertAfter = true;
-        }
-        dragState.insertBeforeTierId = tier.id;
-      });
-
-      itemDiv.addEventListener('dragleave', e => clearInsertionIndicators());
-
-      itemDiv.addEventListener('drop', e => {
-        e.preventDefault();
-        if (!dragState.draggingItemId) return;
-
-        const itemsToMove = selectedItemIds.has(dragState.draggingItemId)
-          ? [...selectedItemIds]
-          : [dragState.draggingItemId];
-
-        handleDropItems(itemsToMove, tier.id, dragState.insertBeforeItemId, dragState.insertAfter);
-
-        clearInsertionIndicators();
-      });
-		const img = document.createElement('img');
-		img.src = item.src;
-		img.alt = item.name || '';
-
-		itemDiv.appendChild(img);
-
-		itemsContainer.appendChild(itemDiv);
-    });
-
-    // --- ACTION BUTTONS ---
-    const controls = document.createElement('div');
-    controls.className = 'tier-actions';
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.innerHTML = '❌';
-    deleteBtn.title = 'Delete Tier';
-    deleteBtn.onclick = () => {
-      if (confirm('Delete this tier?')) {
-        tiers.splice(index, 1);
-        render();
-        saveToLocal();
-      }
-    };
-
-    const colorPickerContainer = document.createElement('div');
-    colorPickerContainer.className = 'color-picker-container';
-
-    const addAboveBtn = document.createElement('button');
-    addAboveBtn.textContent = '＋↑';
-    addAboveBtn.title = 'Add Tier Above';
-    addAboveBtn.onclick = () => {
-      tiers.splice(index, 0, createTier());
-      render();
-      saveToLocal();
-    };
-
-    const addBelowBtn = document.createElement('button');
-    addBelowBtn.textContent = '＋↓';
-    addBelowBtn.title = 'Add Tier Below';
-    addBelowBtn.onclick = () => {
-      tiers.splice(index + 1, 0, createTier());
-      render();
-      saveToLocal();
-    };
-
-    controls.appendChild(addAboveBtn);
-    controls.appendChild(colorPickerContainer);
-    controls.appendChild(addBelowBtn);
-    controls.appendChild(deleteBtn);
-
-    tierDiv.appendChild(grabHandle);
-    tierDiv.appendChild(labelDiv);
-    tierDiv.appendChild(itemsContainer);
-    tierDiv.appendChild(controls);
-
-    tiersContainer.appendChild(tierDiv);
-
+  // Setup color picker after appending
+  requestAnimationFrame(() => {
+    if (!colorWrap.isConnected) return;
     const pickr = Pickr.create({
-      el: colorPickerContainer,
+      el: colorWrap,
       theme: 'nano',
       default: tier.color,
       swatches: [
-        '#FF7F7F', '#FFBF7F', '#FFDF7F',
-        '#FFFF7F', '#BFFF7F', '#7FFF7F',
-        '#7FFFFF', '#7FBFFF', '#7F7FFF',
-        '#FF7FFF', '#BF7FBF', '#3B3B3B',
-        '#858585', '#CFCFCF', '#F7F7F7'
+        '#FF7F7F','#FFBF7F','#FFDF7F','#FFFF7F','#BFFF7F','#7FFF7F',
+        '#7FFFFF','#7FBFFF','#7F7FFF','#FF7FFF','#BF7FBF','#888'
       ],
-      useAsButton: false,
-      components: {
-        preview: true,
-        opacity: false,
-        hue: true,
-        interaction: {
-          hex: true,
-          rgba: true,
-          input: true,
-          clear: false,
-          save: false
-        }
-      }
+      components: { preview: true, opacity: false, hue: true,
+        interaction: { hex: true, input: true, save: false, clear: false } }
     });
-
-    pickr.on('change', (color) => {
-      clearTimeout(updateColorTimeout);
-      updateColorTimeout = setTimeout(() => {
-        if (color) {
-          tier.color = color.toHEXA().toString();
-          render();
-          saveToLocal();
-        }
-      }, 50); // Adjust delay as needed
+    let colorTimeout = null;
+    pickr.on('change', color => {
+      clearTimeout(colorTimeout);
+      colorTimeout = setTimeout(() => {
+        tier.color = color.toHEXA().toString();
+        labelDiv.style.backgroundColor = tier.color;
+        saveState();
+      }, 50);
     });
-
   });
 
-  pool.forEach(item => {
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'item';
-    itemDiv.dataset.itemId = item.id;
-    itemDiv.draggable = true;
-    itemDiv.title = item.name || 'Untitled';
+  return tierDiv;
+}
 
-    // NEW: Highlight selected in pool
-    if (selectedItemIds.has(item.id)) {
-      itemDiv.classList.add('selected');
-    }
+async function buildRefEls(ref, tierId) {
+  if (ref.type === 'item') return [await buildItemEl(ref, tierId, null)];
+  if (ref.type === 'group') {
+    const iconEl = await buildGroupIconEl(ref, tierId);
+    if (ref.collapsed) return [iconEl];
+    const itemEls = await Promise.all(ref.items.map(item => buildItemEl(item, tierId, ref.id)));
 
-    itemDiv.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleSelection(item.id, e);
-    });
+    // Wrap icon + items in a bracket for visual grouping
+    const bracket = document.createElement('div');
+    bracket.className = 'group-bracket';
+    bracket.dataset.groupId = ref.id;
+    bracket.style.setProperty('--group-color', ref.color);
+    bracket.appendChild(iconEl);
+    itemEls.forEach(el => bracket.appendChild(el));
 
-	itemDiv.addEventListener('dragstart', e => {
-	  const id = item.id;
-	  if (!selectedItemIds.has(id)) {
-		selectedItemIds.clear();
-		selectedItemIds.add(id);
-		lastSelectedItemId = id;
-		// Don't call render here!
-		// Instead, manually add "selected" class to this item only
-		document.querySelectorAll('.item.selected').forEach(el => el.classList.remove('selected'));
-		if (selectedItemIds.size > 1) {
-		  itemDiv.classList.add('selected');
-		} else {
-		  itemDiv.classList.remove('selected');
-		}
-	  }
-	  dragState.draggingItemId = id;
-	  dragState.fromTierId = null;  // or null if pool item
-	  dragState.draggingElement = itemDiv;
-	  e.dataTransfer.effectAllowed = 'move';
-	  itemDiv.classList.add('dragging');
-	});
-
-	itemDiv.addEventListener('dragend', e => {
-	  dragState.draggingItemId = null;
-	  dragState.fromTierId = null;
-	  dragState.insertBeforeItemId = null;
-	  dragState.insertBeforeTierId = null;
-	  dragState.insertAfter = false;
-	  dragState.draggingElement?.classList.remove('dragging');
-	  dragState.draggingElement = null;
-	  clearInsertionIndicators();
-	  render();  // Now safe to rerender to update UI fully
-	});
-
-
-    itemDiv.addEventListener('dragover', e => {
+    // Bracket: highlight when an item is dragged over the empty area (not over child items)
+    bracket.addEventListener('dragover', e => {
+      if (drag.type !== 'item' && drag.type !== 'group') return;
+      if (e.target.closest('.item')) return; // child items handle themselves
       e.preventDefault();
-      if (!dragState.draggingItemId || itemDiv === dragState.draggingElement) return;
-      const rect = itemDiv.getBoundingClientRect();
-      const mouseX = e.clientX;
-      clearInsertionIndicators();
-      if (mouseX - rect.left < rect.width / 2) {
-        itemDiv.classList.add('insertion-before');
-        dragState.insertBeforeItemId = item.id;
-        dragState.insertAfter = false;
-      } else {
-        itemDiv.classList.add('insertion-after');
-        dragState.insertBeforeItemId = item.id;
-        dragState.insertAfter = true;
+      if (drag.type === 'item') {
+        bracket.classList.add('drop-target');
+        drag.insertBeforeId = null;
       }
-      dragState.insertBeforeTierId = null;
+    });
+    bracket.addEventListener('dragleave', e => {
+      if (!bracket.contains(e.relatedTarget)) bracket.classList.remove('drop-target');
+    });
+    bracket.addEventListener('drop', e => {
+      bracket.classList.remove('drop-target');
+      if (drag.type !== 'item') return;
+      e.preventDefault(); e.stopPropagation();
+      dropItems([...selectedIds], tierId, null, false, ref.id);
     });
 
-    itemDiv.addEventListener('dragleave', e => clearInsertionIndicators());
+    // Pass bracket to icon so dragstart can mark it
+    iconEl._bracket = bracket;
 
-    itemDiv.addEventListener('drop', e => {
-      e.preventDefault();
+    return [bracket];
+  }
+  return [];
+}
 
-      if (!dragState.draggingItemId) return;
+async function buildItemEl(ref, tierId, groupId) {
+  const div = document.createElement('div');
+  div.className = 'item';
+  div.dataset.itemId = ref.id;
+  div.draggable = true;
 
-      const itemsToMove = selectedItemIds.has(dragState.draggingItemId)
-        ? [...selectedItemIds]
-        : [dragState.draggingItemId];
+  if (selectedIds.has(ref.id)) div.classList.add('selected');
 
-      handleDropItems(itemsToMove, null, dragState.insertBeforeItemId, dragState.insertAfter);
+  const src = await getCachedImage(ref.id);
+  const img = document.createElement('img');
+  img.src = src || '';
+  img.alt = ref.name || '';
+  div.appendChild(img);
 
-      clearInsertionIndicators();
-    });
+  if (ref.name) {
+    div.addEventListener('mouseenter', e => showTooltip(ref.name, e));
+    div.addEventListener('mousemove', e => showTooltip(ref.name, e));
+    div.addEventListener('mouseleave', hideTooltip);
+  }
 
-    const img = document.createElement('img');
-	img.src = item.src;
-	img.alt = item.name || '';
+  div.addEventListener('click', e => { e.stopPropagation(); toggleSelect(ref.id, e); });
 
-	itemDiv.appendChild(img);
+  div.addEventListener('dragstart', e => {
+    hideTooltip();
+    if (!selectedIds.has(ref.id)) {
+      selectedIds.clear();
+      selectedIds.add(ref.id);
+      lastSelectedId = ref.id;
+    }
+    drag.type = 'item';
+    drag.id = ref.id;
+    drag.fromTierId = tierId;
+    drag.fromGroupId = groupId;
+    drag.el = div;
+    div.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
 
-	poolItems.appendChild(itemDiv);
+  div.addEventListener('dragend', () => {
+    // Only render if drop didn't happen (e.g. drag was cancelled)
+    // dropItems() handles render on successful drops
+    if (drag.id !== null) { resetDrag(); render(); }
+    else { resetDrag(); }
+  });
+
+  div.addEventListener('dragover', e => {
+    if (drag.type !== 'item' && drag.type !== 'group') return;
+    e.preventDefault(); e.stopPropagation();
+    const rect = div.getBoundingClientRect();
+    clearInsertionMarkers();
+    if (e.clientX < rect.left + rect.width / 2) {
+      div.classList.add('insert-before');
+      drag.insertBeforeId = ref.id;
+      drag.insertAfter = false;
+    } else {
+      div.classList.add('insert-after');
+      drag.insertBeforeId = ref.id;
+      drag.insertAfter = true;
+    }
+  });
+
+  div.addEventListener('dragleave', clearInsertionMarkers);
+
+  div.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    if (drag.type === 'item') {
+      dropItems([...selectedIds], tierId, drag.insertBeforeId, drag.insertAfter, groupId);
+    } else if (drag.type === 'group') {
+      dropGroup(drag.id, tierId, drag.insertBeforeId, drag.insertAfter);
+    }
+  });
+
+  return div;
+}
+
+async function buildGroupIconEl(group, tierId) {
+  const div = document.createElement('div');
+  div.className = 'group-icon' + (group.collapsed ? '' : ' expanded');
+  div.dataset.groupId = group.id;
+  div.style.setProperty('--group-color', group.color);
+
+  // Folder icon SVG
+  const icon = document.createElement('div');
+  icon.className = 'group-icon-symbol';
+  icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
+  </svg>`;
+  div.appendChild(icon);
+
+  // Name label
+  const name = document.createElement('div');
+  name.className = 'group-icon-name';
+  name.textContent = group.name;
+  div.appendChild(name);
+
+  // Count badge
+  const count = document.createElement('div');
+  count.className = 'group-icon-count';
+  count.textContent = group.items.length;
+  div.appendChild(count);
+
+  // Click to toggle expand/collapse (fast path - only re-renders this container)
+  div.addEventListener('click', e => {
+    if (e.defaultPrevented) return;
+    group.collapsed = !group.collapsed;
+    rerenderTierItems(tierId);
+  });
+
+  // Drag the group icon to move it
+  div.draggable = true;
+  div.addEventListener('dragstart', e => {
+    hideTooltip();
+    drag.type = 'group';
+    drag.id = group.id;
+    drag.fromTierId = tierId;
+    drag.el = div;
+    const bracket = div._bracket || div;
+    bracket.classList.add('dragging');
+    div.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.stopPropagation();
+  });
+  div.addEventListener('dragend', () => {
+    if (drag.id !== null) { resetDrag(); render(); }
+    else resetDrag();
+  });
+
+  // Dragover on icon: show insertion marker on bracket (or icon if collapsed)
+  div.addEventListener('dragover', e => {
+    if (drag.type !== 'item' && drag.type !== 'group') return;
+    e.preventDefault(); e.stopPropagation();
+    const target = div._bracket || div;
+    const rect = target.getBoundingClientRect();
+    clearInsertionMarkers();
+    if (e.clientX < rect.left + rect.width / 2) {
+      target.classList.add('insert-before');
+      drag.insertBeforeId = group.id;
+      drag.insertAfter = false;
+    } else {
+      target.classList.add('insert-after');
+      drag.insertBeforeId = group.id;
+      drag.insertAfter = true;
+    }
+  });
+  div.addEventListener('dragleave', e => {
+    if (!div.contains(e.relatedTarget)) clearInsertionMarkers();
+  });
+  div.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    if (drag.type === 'item') {
+      dropItems([...selectedIds], tierId, drag.insertBeforeId, drag.insertAfter, null);
+    } else if (drag.type === 'group' && drag.id !== group.id) {
+      dropGroup(drag.id, tierId, drag.insertBeforeId, drag.insertAfter);
+    }
+  });
+
+  // Right-click context menu
+  div.addEventListener('contextmenu', e => {
+    e.preventDefault(); e.stopPropagation();
+    ctxTargetId = group.id;
+    ctxTargetType = 'group';
+    showCtxMenu(e.pageX, e.pageY);
+  });
+
+  return div;
+}
+// ── DROP HANDLING ─────────────────────────────────────────────────────────────
+function setupDropZone(el, tierId) {
+  el.addEventListener('dragover', e => {
+    if (drag.type === 'item' || drag.type === 'group') e.preventDefault();
+  });
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    if (drag.type === 'item') {
+      dropItems([...selectedIds], tierId, drag.insertBeforeId, drag.insertAfter, null);
+    } else if (drag.type === 'group') {
+      dropGroup(drag.id, tierId, drag.insertBeforeId, drag.insertAfter);
+    }
   });
 }
 
-// NEW: Handle multiple items drop at once
-function handleDropItems(itemIds, toTierId, insertBeforeId = null, insertAfter = false) {
-  if (!itemIds || !itemIds.length) return;
+function dropItems(itemIds, toTierId, insertBeforeId, insertAfter, toGroupId) {
+  if (!itemIds.length) { resetDrag(); return; }
 
-  // Remove all items from wherever they currently are
-  const removedItems = [];
+  // If dropping a single item onto itself, do nothing
+  if (itemIds.length === 1 && itemIds[0] === insertBeforeId) {
+    drag.id = null; resetDrag(); return;
+  }
 
-  for (const itemId of itemIds) {
-    let itemObj = null;
-    // Find source tier
-    let fromTier = null;
-    for (const tier of tiers) {
-      const idx = tier.items.findIndex(i => i.id === itemId);
-      if (idx !== -1) {
-        fromTier = tier;
-        [itemObj] = tier.items.splice(idx, 1);
+  const removed = itemIds.map(id => removeFromContainer(id)).filter(Boolean);
+
+  let target;
+  if (toGroupId) {
+    const gRef = findGroupRef(toGroupId);
+    target = gRef ? gRef.ref.items : getTargetContainer(toTierId);
+  } else {
+    target = getTargetContainer(toTierId);
+  }
+
+  if (!target) { resetDrag(); return; }
+
+  if (insertBeforeId) {
+    let idx = target.findIndex(r => r.id === insertBeforeId);
+    if (idx === -1) {
+      target.push(...removed);
+    } else {
+      if (insertAfter) idx++;
+      target.splice(idx, 0, ...removed);
+    }
+  } else {
+    target.push(...removed);
+  }
+
+  // Keep selection so user can see what they moved
+  saveState();
+  drag.id = null;
+  resetDrag();
+  render();
+}
+
+function dropGroup(groupId, toTierId, insertBeforeId, insertAfter) {
+  if (groupId === insertBeforeId) { drag.id = null; resetDrag(); return; }
+  const removed = removeFromContainer(groupId);
+  if (!removed) { resetDrag(); return; }
+  const target = getTargetContainer(toTierId);
+  if (!target) { resetDrag(); return; }
+  if (insertBeforeId) {
+    let idx = target.findIndex(r => r.id === insertBeforeId);
+    if (idx === -1) { target.push(removed); }
+    else { if (insertAfter) idx++; target.splice(idx, 0, removed); }
+  } else {
+    target.push(removed);
+  }
+  drag.id = null;
+  saveState(); resetDrag(); render();
+}
+
+
+function toggleSelect(itemId, e) {
+  if (e.shiftKey && lastSelectedId) {
+    const all = [...document.querySelectorAll('.item')].map(el => el.dataset.itemId);
+    const a = all.indexOf(lastSelectedId), b = all.indexOf(itemId);
+    const [start, end] = a < b ? [a, b] : [b, a];
+    selectedIds.clear();
+    for (let i = start; i <= end; i++) selectedIds.add(all[i]);
+  } else if (e.ctrlKey || e.metaKey) {
+    selectedIds.has(itemId) ? selectedIds.delete(itemId) : selectedIds.add(itemId);
+  } else {
+    selectedIds.clear();
+    selectedIds.add(itemId);
+  }
+  lastSelectedId = itemId;
+  // Just update classes without full re-render
+  document.querySelectorAll('.item').forEach(el => {
+    el.classList.toggle('selected', selectedIds.has(el.dataset.itemId));
+  });
+}
+
+function clearInsertionMarkers() {
+  document.querySelectorAll('.insert-before, .insert-after').forEach(el => {
+    el.classList.remove('insert-before', 'insert-after');
+  });
+  document.querySelectorAll('.tier.drag-target-above,.tier.drag-target-below').forEach(el => {
+    el.classList.remove('drag-target-above', 'drag-target-below');
+  });
+  drag.insertBeforeId = null;
+  drag.insertTierBeforeId = null;
+}
+
+// ── TOOLTIP ──────────────────────────────────────────────────────────────────
+const sharedTooltip = document.createElement('div');
+sharedTooltip.className = 'item-tooltip';
+sharedTooltip.style.display = 'none';
+document.body.appendChild(sharedTooltip);
+
+function showTooltip(name, e) {
+  if (!name) return;
+  sharedTooltip.textContent = name;
+  sharedTooltip.style.display = 'block';
+  sharedTooltip.style.left = e.clientX + 'px';
+  sharedTooltip.style.top = (e.clientY - 30) + 'px';
+}
+
+function hideTooltip() {
+  sharedTooltip.style.display = 'none';
+}
+
+// ── IMAGES ───────────────────────────────────────────────────────────────────
+async function addImagesFromFiles(files) {
+  const promises = Array.from(files).map(file => new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      const ref = makeItem(file.name.replace(/\.[^.]+$/, ''));
+      await saveImage(ref.id, ev.target.result);
+      imageCache.set(ref.id, ev.target.result);
+      pool.push(ref);
+      resolve();
+    };
+    reader.readAsDataURL(file);
+  }));
+  await Promise.all(promises);
+  saveState();
+  render();
+}
+
+// ── GROUPS ───────────────────────────────────────────────────────────────────
+function groupSelected() {
+  if (selectedIds.size < 1) return;
+  showGroupModal(async name => {
+    if (!name) return;
+    const group = makeGroup(name);
+
+    // Find the container and position of the first selected item in DOM order
+    const allItemEls = [...document.querySelectorAll('.item')];
+    let insertContainer = null;
+    let insertIdx = -1;
+    for (const el of allItemEls) {
+      if (selectedIds.has(el.dataset.itemId)) {
+        // Find which container this item is in
+        const tierEl = el.closest('.tier-items-container');
+        const tierId = tierEl?.dataset.tierId || null;
+        const container = getTargetContainer(tierId);
+        if (container) {
+          // Find index of this item in the container (top level only)
+          const itemId = el.dataset.itemId;
+          const idx = container.findIndex(r => r.id === itemId || (r.type === 'group' && r.items.some(i => i.id === itemId)));
+          if (idx !== -1) { insertContainer = container; insertIdx = idx; }
+        }
         break;
       }
     }
-    if (!itemObj) {
-      // Not found in tiers, check pool
-      const poolIdx = pool.findIndex(i => i.id === itemId);
-      if (poolIdx !== -1) {
-        [itemObj] = pool.splice(poolIdx, 1);
-      }
-    }
-    if (itemObj) removedItems.push(itemObj);
-  }
 
-  if (toTierId === null) {
-    // Insert into pool
-    if (insertBeforeId) {
-      const idx = pool.findIndex(i => i.id === insertBeforeId);
-      if (idx !== -1) {
-        // Insert all items starting at idx, respecting insertAfter flag
-        let insertAt = insertAfter ? idx + 1 : idx;
-        pool.splice(insertAt, 0, ...removedItems);
-      } else {
-        pool.push(...removedItems);
-      }
+    const refs = [...selectedIds].map(id => removeFromContainer(id)).filter(Boolean);
+    group.items = refs;
+
+    if (insertContainer && insertIdx !== -1) {
+      // insertIdx may have shifted after removals, recalculate
+      insertContainer.splice(Math.min(insertIdx, insertContainer.length), 0, group);
     } else {
-      pool.push(...removedItems);
+      pool.push(group);
     }
-  } else {
-    // Insert into target tier
-    const targetTier = tiers.find(t => t.id === toTierId);
-    if (!targetTier) return;
-    if (insertBeforeId) {
-      const idx = targetTier.items.findIndex(i => i.id === insertBeforeId);
-      if (idx !== -1) {
-        let insertAt = insertAfter ? idx + 1 : idx;
-        targetTier.items.splice(insertAt, 0, ...removedItems);
-      } else {
-        targetTier.items.push(...removedItems);
-      }
-    } else {
-      targetTier.items.push(...removedItems);
-    }
-  }
 
-  // Clear dragState & selection
-  dragState.draggingItemId = null;
-  dragState.fromTierId = null;
-  dragState.insertBeforeItemId = null;
-  dragState.insertBeforeTierId = null;
-  dragState.insertAfter = false;
-  dragState.draggingElement = null;
-  dragState.dragOverElement = null;
-
-  // Clear selection after move
-  selectedItemIds.clear();
-  lastSelectedItemId = null;
-
-  render();
-  saveToLocal();
-}
-
-const resetBtn = document.getElementById('reset-btn');
-
-resetBtn.onclick = () => {
-  if (confirm('Are you sure you want to reset the tierlist to default? This will remove all items and tiers.')) {
-    tiers = [
-      createTier('S', '#ff7f7f'),
-      createTier('A', '#ffbf7f'),
-      createTier('B', '#ffdf7f'),
-      createTier('C', '#ffff7f'),
-      createTier('D', '#bfff7f'),
-    ];
-    pool = [];
-    selectedItemIds.clear();
-    lastSelectedItemId = null;
+    selectedIds.clear();
+    lastSelectedId = null;
+    saveState();
     render();
-    saveToLocal();
-  }
-};
-
-exportBtn.onclick = () => {
-  const dataStr = JSON.stringify({ tiers, pool }, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'tierlist.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-};
-
-importBtn.onclick = () => importJsonInput.click();
-imageAdder.onclick = () => imageLoader.click();
-
-pinToggleBtn.onclick = () => {
-  pinned = !pinned;
-  document.body.classList.toggle('pool-pinned', pinned);
-  pinToggleBtn.textContent = pinned ? '📌 Unpin' : '📌 Pin';
-};
-
-trashButton.addEventListener('dragover', e => {
-  e.preventDefault();
-  trashButton.classList.add('drag-over-trash');
-});
-
-trashButton.addEventListener('dragleave', () => {
-  trashButton.classList.remove('drag-over-trash');
-});
-
-trashButton.addEventListener('drop', e => {
-  e.preventDefault();
-  trashButton.classList.remove('drag-over-trash');
-
-  if (!selectedItemIds.size) return;
-
-  const confirmed = confirm(`Delete ${selectedItemIds.size} item(s)? This cannot be undone.`);
-  if (!confirmed) return;
-
-  // Delete from pool
-  for (let i = pool.length - 1; i >= 0; i--) {
-    if (selectedItemIds.has(pool[i].id)) {
-      pool.splice(i, 1);
-    }
-  }
-
-  // Delete from tiers
-  for (const tier of tiers) {
-    for (let i = tier.items.length - 1; i >= 0; i--) {
-      if (selectedItemIds.has(tier.items[i].id)) {
-        tier.items.splice(i, 1);
-      }
-    }
-  }
-
-  selectedItemIds.clear();
-  lastSelectedItemId = null;
-  render();
-  saveToLocal();
-});
-
-exportImageBtn.onclick = () => {
-  modal.classList.remove('hidden');
-  generateExportPreview();
-};
-
-closeModalBtn.onclick = () => {
-  modal.classList.add('hidden');
-};
-
-downloadPngBtn.onclick = () => {
-  exportTierlistAsImage();
-};
-
-function setBackgroundTransparent(node, transparent = true) {
-  const backgrounds = [];
-  const all = [node, ...node.querySelectorAll('*')];
-
-  all.forEach(el => {
-    if (el.classList.contains('tier-label')) return;
-
-    backgrounds.push({
-      el,
-      backgroundColor: el.style.backgroundColor || '',
-      background: el.style.background || ''
-    });
-
-    if (transparent) {
-      el.style.backgroundColor = 'transparent';
-      el.style.background = 'transparent';
-    } else {
-      const orig = backgrounds.find(b => b.el === el);
-      if (orig) {
-        el.style.backgroundColor = orig.backgroundColor;
-        el.style.background = orig.background;
-      }
-    }
   });
-
-  return backgrounds;
 }
 
-function exportTierlistAsImage() {
-  const node = document.getElementById('tiers');
-  modal.classList.add('hidden');
+async function ungroupItems(groupId) {
+  const gRef = findGroupRef(groupId);
+  if (!gRef) return;
+  const items = [...gRef.ref.items];
+  const container = gRef.container;
+  const idx = container.findIndex(r => r.id === groupId);
+  container.splice(idx, 1, ...items);
+  saveState();
+  render();
+}
 
-  const scaleInput = document.getElementById('exportScale');
-  const transparentInput = document.getElementById('exportTransparent');
+// ── CONTEXT MENU ─────────────────────────────────────────────────────────────
+const ctxMenu = document.getElementById('context-menu');
+let ctxTargetId = null;
+let ctxTargetType = null;
 
-  const scale = parseFloat(scaleInput?.value) || 1;
-  const transparent = transparentInput?.checked || false;
+function showCtxMenu(x, y) {
+  ctxMenu.querySelector('[data-action="ungroup"]').style.display =
+    ctxTargetType === 'group' ? 'block' : 'none';
+  ctxMenu.querySelector('[data-action="group"]').style.display =
+    ctxTargetType === 'item' ? 'block' : 'none';
+  ctxMenu.querySelector('[data-action="recolor"]').style.display =
+    ctxTargetType === 'group' ? 'block' : 'none';
+  ctxMenu.style.left = Math.min(x, window.innerWidth - 180) + 'px';
+  ctxMenu.style.top = Math.min(y, window.innerHeight - 160) + 'px';
+  ctxMenu.classList.remove('hidden');
+}
 
-  const grabHandles = node.querySelectorAll('.grab-handle');
-  const tierActionsContainers = node.querySelectorAll('.tier-actions');
-  grabHandles.forEach(el => el.style.display = 'none');
-  tierActionsContainers.forEach(el => el.style.display = 'none');
+document.addEventListener('contextmenu', e => {
+  const itemEl = e.target.closest('.item');
+  const groupEl = e.target.closest('.group-icon');
 
-  const originalWidth = node.style.width;
-  const originalHeight = node.style.height;
-  const originalBackground = node.style.background;
+  if (!itemEl && !groupEl) return;
+  e.preventDefault();
 
-  const rect = node.getBoundingClientRect();
-  const width = rect.width;
-  const height = rect.height;
-
-  node.style.width = width * scale + 'px';
-  node.style.height = height * scale + 'px';
-
-  if (transparent) {
-    setBackgroundTransparent(node, true);
+  if (itemEl && !e.target.closest('.group-label')) {
+    const id = itemEl.dataset.itemId;
+    if (!selectedIds.has(id)) {
+      selectedIds.clear();
+      selectedIds.add(id);
+      lastSelectedId = id;
+      document.querySelectorAll('.item').forEach(el =>
+        el.classList.toggle('selected', selectedIds.has(el.dataset.itemId)));
+    }
+    ctxTargetId = id;
+    ctxTargetType = 'item';
+    showCtxMenu(e.pageX, e.pageY);
   }
+  // group contextmenu is handled in buildGroupEl
+});
 
-  domtoimage.toPng(node, {
-    width: width * scale,
-    height: height * scale,
-    style: {
-      transform: `scale(${scale})`,
-      transformOrigin: 'top left',
-      background: transparent ? 'transparent' : originalBackground,
-    },
-    filter: (node) => !node.classList.contains('grab-handle') && !node.classList.contains('tier-actions')
-  })
-    .then(dataUrl => {
-      node.style.width = originalWidth;
-      node.style.height = originalHeight;
-      node.style.background = originalBackground;
-      grabHandles.forEach(el => el.style.display = '');
-      tierActionsContainers.forEach(el => el.style.display = '');
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('#context-menu')) ctxMenu.classList.add('hidden');
+});
 
-      setBackgroundTransparent(node, false);
+ctxMenu.addEventListener('click', async e => {
+  const opt = e.target.closest('.ctx-option');
+  if (!opt) return;
+  ctxMenu.classList.add('hidden');
+  const action = opt.dataset.action;
 
-      const link = document.createElement('a');
-      link.download = 'tierlist.png';
-      link.href = dataUrl;
-      link.click();
-    })
-    .catch(err => {
-      node.style.width = originalWidth;
-      node.style.height = originalHeight;
-      node.style.background = originalBackground;
-      grabHandles.forEach(el => el.style.display = '');
-      tierActionsContainers.forEach(el => el.style.display = '');
-
-      setBackgroundTransparent(node, false);
-
-      console.error('Export failed:', err);
-      alert('Export failed. See console for details.');
+  if (action === 'rename') {
+    if (ctxTargetType === 'group') {
+      const gRef = findGroupRef(ctxTargetId);
+      if (!gRef) return;
+      const name = await showPrompt('Rename group:', gRef.ref.name);
+      if (name !== null) { gRef.ref.name = name; saveState(); render(); }
+    } else {
+      const ids = [...selectedIds];
+      const names = ids.map(id => findItemRef(id)?.ref.name || '').join(', ');
+      const val = await showPrompt(`Rename (comma-separated for multiple):`, names);
+      if (val === null) return;
+      const parts = val.split(',').map(s => s.trim());
+      ids.forEach((id, i) => {
+        const r = findItemRef(id);
+        if (r && parts[i]) r.ref.name = parts[i];
+      });
+      saveState(); render();
+    }
+  } else if (action === 'group') {
+    groupSelected();
+  } else if (action === 'ungroup') {
+    await ungroupItems(ctxTargetId);
+  } else if (action === 'recolor') {
+    const gRef = findGroupRef(ctxTargetId);
+    if (!gRef) return;
+    // Create a throwaway element for Pickr so it doesn't destroy the menu item
+    const anchor = document.createElement('div');
+    anchor.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;pointer-events:none;';
+    document.body.appendChild(anchor);
+    const pickr = Pickr.create({
+      el: anchor,
+      theme: 'nano',
+      default: gRef.ref.color,
+      swatches: GROUP_COLORS,
+      components: { preview: true, opacity: false, hue: true,
+        interaction: { hex: true, input: true, save: false, clear: false } }
     });
+    let colorTimeout = null;
+    pickr.on('change', color => {
+      clearTimeout(colorTimeout);
+      colorTimeout = setTimeout(() => {
+        gRef.ref.color = color.toHEXA().toString();
+        document.querySelectorAll(`[data-group-id="${ctxTargetId}"]`).forEach(el => {
+          el.style.setProperty('--group-color', gRef.ref.color);
+        });
+        document.querySelectorAll('.group-bracket').forEach(el => {
+          if (el.dataset.groupId === ctxTargetId)
+            el.style.setProperty('--group-color', gRef.ref.color);
+        });
+        saveState();
+      }, 50);
+    });
+    pickr.on('hide', () => {
+      pickr.destroyAndRemove();
+      anchor.remove();
+      rerenderTierItems(gRef.container === pool ? null : tiers.find(t => t.items.some(r => r.id === ctxTargetId || (r.type === 'group' && r.items?.some(i => i.id === ctxTargetId))))?.id ?? null);
+    });
+    pickr.show();
+  } else if (action === 'delete') {
+    const confirmed = await showConfirm(
+      ctxTargetType === 'group'
+        ? `Delete group and all ${findGroupRef(ctxTargetId)?.ref.items.length || 0} items?`
+        : `Delete ${selectedIds.size} item(s)?`
+    );
+    if (!confirmed) return;
+    if (ctxTargetType === 'group') {
+      const gRef = findGroupRef(ctxTargetId);
+      if (gRef) {
+        for (const item of gRef.ref.items) await deleteImage(item.id);
+        removeFromContainer(ctxTargetId);
+      }
+    } else {
+      for (const id of selectedIds) {
+        await deleteImage(id);
+        removeFromContainer(id);
+      }
+      selectedIds.clear();
+    }
+    saveState(); render();
+  }
+});
+
+// ── TRASH ────────────────────────────────────────────────────────────────────
+const trashBtn = document.getElementById('trash-button');
+trashBtn.addEventListener('dragover', e => { e.preventDefault(); trashBtn.classList.add('drag-over'); });
+trashBtn.addEventListener('dragleave', () => trashBtn.classList.remove('drag-over'));
+trashBtn.addEventListener('drop', async e => {
+  e.preventDefault();
+  trashBtn.classList.remove('drag-over');
+  if (!selectedIds.size) return;
+  const confirmed = await showConfirm(`Delete ${selectedIds.size} item(s)?`);
+  if (!confirmed) return;
+  for (const id of selectedIds) {
+    await deleteImage(id);
+    removeFromContainer(id);
+  }
+  selectedIds.clear();
+  saveState(); render();
+});
+
+// ── EXPORT / IMPORT ──────────────────────────────────────────────────────────
+document.getElementById('export-btn').onclick = async () => {
+  const allImgs = await getAllImages();
+  const imgMap = Object.fromEntries(allImgs.map(i => [i.id, i.src]));
+  const out = {
+    version: 2,
+    tiers: tiers.map(t => ({
+      ...t,
+      items: t.items.map(ref => serializeRef(ref, imgMap))
+    })),
+    pool: pool.map(ref => serializeRef(ref, imgMap))
+  };
+  const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tierlist.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+function serializeRef(ref, imgMap) {
+  if (ref.type === 'item') return { ...ref, src: imgMap[ref.id] || null };
+  if (ref.type === 'group') return { ...ref, items: ref.items.map(r => ({ ...r, src: imgMap[r.id] || null })) };
+  return ref;
 }
 
-function generateExportPreview() {
-  const node = document.getElementById('tiers');
+document.getElementById('import-btn').onclick = () => document.getElementById('import-json').click();
 
-  const grabHandles = node.querySelectorAll('.grab-handle');
-  const tierActionsContainers = node.querySelectorAll('.tier-actions');
-  grabHandles.forEach(el => el.style.display = 'none');
-  tierActionsContainers.forEach(el => el.style.display = 'none');
-
-  const rect = node.getBoundingClientRect();
-
-  domtoimage.toPng(node, {
-    filter: (node) => !node.classList.contains('grab-handle') && !node.classList.contains('tier-actions')
-  })
-    .then(dataUrl => {
-      grabHandles.forEach(el => el.style.display = '');
-      tierActionsContainers.forEach(el => el.style.display = '');
-
-      const previewImg = document.getElementById('exportPreviewImage');
-      previewImg.src = dataUrl;
-    })
-    .catch(err => {
-      grabHandles.forEach(el => el.style.display = '');
-      tierActionsContainers.forEach(el => el.style.display = '');
-
-      console.error('Preview generation failed:', err);
-    });
-}
-
-importJsonInput.addEventListener('change', e => {
+document.getElementById('import-json').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
+  e.target.value = '';
   const reader = new FileReader();
-  reader.onload = event => {
+  reader.onload = async ev => {
     try {
-      const data = JSON.parse(event.target.result);
-      if (data.tiers && data.pool) {
-        tiers = data.tiers;
-        pool = data.pool;
-        selectedItemIds.clear();
-        lastSelectedItemId = null;
-        render();
-        saveToLocal();
-      } else {
-        alert('Invalid tierlist file.');
+      const d = JSON.parse(ev.target.result);
+
+      // Support both v1 (old format with src on items) and v2
+      const isV2 = d.version === 2;
+
+      async function importRef(ref) {
+        if (ref.type === 'item' || !ref.type) {
+          const r = { type: 'item', id: ref.id || crypto.randomUUID(), name: ref.name || '' };
+          if (ref.src) { await saveImage(r.id, ref.src); imageCache.set(r.id, ref.src); }
+          return r;
+        }
+        if (ref.type === 'group') {
+          const items = [];
+          for (const item of (ref.items || [])) items.push(await importRef(item));
+          return { type: 'group', id: ref.id || crypto.randomUUID(), name: ref.name || 'Group',
+            color: ref.color || GROUP_COLORS[0], collapsed: false, items };
+        }
+        return null;
       }
-    } catch {
-      alert('Failed to parse JSON file.');
+
+      tiers = [];
+      pool = [];
+
+      for (const ot of (d.tiers || [])) {
+        const items = [];
+        for (const r of (ot.items || [])) {
+          const imported = await importRef(r);
+          if (imported) items.push(imported);
+        }
+        tiers.push({ id: ot.id || crypto.randomUUID(), name: ot.name || 'Tier',
+          color: ot.color || '#888', items });
+      }
+
+      for (const r of (d.pool || [])) {
+        const imported = await importRef(r);
+        if (imported) pool.push(imported);
+      }
+
+      saveState(); render();
+    } catch(err) {
+      alert('Failed to import: ' + err.message);
     }
   };
   reader.readAsText(file);
 });
 
-function loadImagesFromFiles(files) {
-  const promises = Array.from(files).map(file => new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const name = file.name.split('.').slice(0, -1).join('.');
-      pool.push(createItem(ev.target.result, null, name));
-      resolve();
-    };
-    reader.readAsDataURL(file);
-  }));
+// ── IMAGE EXPORT ─────────────────────────────────────────────────────────────
+document.getElementById('exportImageBtn').onclick = () => {
+  document.getElementById('export-modal').classList.remove('hidden');
+  generatePreview();
+};
 
-  return Promise.all(promises).then(() => {
-    render();
-    saveToLocal();
+document.getElementById('download-png').onclick = () => {
+  exportImage();
+};
+
+function prepareForExport() {
+  // Expand all groups temporarily
+  const collapsed = [];
+  for (const t of tiers) {
+    for (const r of t.items) {
+      if (r.type === 'group' && r.collapsed) {
+        r.collapsed = false;
+        collapsed.push(r);
+      }
+    }
+  }
+  return collapsed;
+}
+
+function restoreAfterExport(collapsed) {
+  for (const g of collapsed) g.collapsed = true;
+}
+
+async function generatePreview() {
+  const node = document.getElementById('tiers');
+  const collapsed = prepareForExport();
+  await render();
+
+  const handles = node.querySelectorAll('.grab-handle, .tier-actions');
+  handles.forEach(el => el.style.display = 'none');
+
+  try {
+    const url = await domtoimage.toPng(node, {
+      filter: n => !n.classList?.contains('grab-handle') && !n.classList?.contains('tier-actions')
+    });
+    document.getElementById('exportPreviewImage').src = url;
+  } catch(e) { console.error(e); }
+
+  handles.forEach(el => el.style.display = '');
+  restoreAfterExport(collapsed);
+  await render();
+}
+
+async function exportImage() {
+  const node = document.getElementById('tiers');
+  const scale = parseFloat(document.getElementById('exportScale').value) || 2;
+  const transparent = document.getElementById('exportTransparent').checked;
+  document.getElementById('export-modal').classList.add('hidden');
+
+  const collapsed = prepareForExport();
+  await render();
+
+  const handles = node.querySelectorAll('.grab-handle, .tier-actions');
+  handles.forEach(el => el.style.display = 'none');
+
+  const rect = node.getBoundingClientRect();
+  const opts = {
+    width: rect.width * scale,
+    height: rect.height * scale,
+    style: { transform: `scale(${scale})`, transformOrigin: 'top left' },
+    filter: n => !n.classList?.contains('grab-handle') && !n.classList?.contains('tier-actions')
+  };
+
+  if (transparent) {
+    // Walk the node and remove backgrounds temporarily
+    const saved = [];
+    [node, ...node.querySelectorAll('*')].forEach(el => {
+      if (el.classList?.contains('tier-label')) return;
+      saved.push([el, el.style.background, el.style.backgroundColor]);
+      el.style.background = 'transparent';
+      el.style.backgroundColor = 'transparent';
+    });
+
+    try {
+      const url = await domtoimage.toPng(node, opts);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'tierlist.png'; a.click();
+    } catch(e) { console.error(e); }
+
+    saved.forEach(([el, bg, bgc]) => { el.style.background = bg; el.style.backgroundColor = bgc; });
+  } else {
+    try {
+      const url = await domtoimage.toPng(node, opts);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'tierlist.png'; a.click();
+    } catch(e) { console.error(e); }
+  }
+
+  handles.forEach(el => el.style.display = '');
+  restoreAfterExport(collapsed);
+  await render();
+}
+
+// ── MODALS ────────────────────────────────────────────────────────────────────
+function showConfirm(message) {
+  return new Promise(resolve => {
+    const overlay = createOverlay();
+    const box = createModalBox();
+    box.innerHTML = `<p style="margin-bottom:14px;font-size:0.9rem;line-height:1.5;">${message}</p>
+      <div style="display:flex;gap:8px;">
+        <button class="hdr-btn" id="conf-cancel">Cancel</button>
+        <button class="hdr-btn danger" id="conf-ok">Confirm</button>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    box.querySelector('#conf-cancel').onclick = () => { overlay.remove(); resolve(false); };
+    box.querySelector('#conf-ok').onclick = () => { overlay.remove(); resolve(true); };
+    overlay.onclick = e => { if (e.target === overlay) { overlay.remove(); resolve(false); } };
   });
 }
 
-imageLoader.addEventListener('change', e => {
-  const files = e.target.files;
-  if (!files.length) return;
-  loadImagesFromFiles(files);
+function showPrompt(message, defaultVal = '') {
+  return new Promise(resolve => {
+    const overlay = createOverlay();
+    const box = createModalBox();
+    box.innerHTML = `<p style="margin-bottom:10px;font-size:0.9rem;">${message}</p>
+      <input type="text" id="prompt-input" value="${defaultVal.replace(/"/g, '&quot;')}"
+        style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;
+        color:var(--text);padding:8px;font-size:0.9rem;margin-bottom:12px;">
+      <div style="display:flex;gap:8px;">
+        <button class="hdr-btn" id="prompt-cancel">Cancel</button>
+        <button class="hdr-btn" id="prompt-ok" style="border-color:var(--accent);">OK</button>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const input = box.querySelector('#prompt-input');
+    input.focus(); input.select();
+    const done = val => { overlay.remove(); resolve(val); };
+    box.querySelector('#prompt-cancel').onclick = () => done(null);
+    box.querySelector('#prompt-ok').onclick = () => done(input.value);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') done(input.value); if (e.key === 'Escape') done(null); });
+    overlay.onclick = e => { if (e.target === overlay) done(null); };
+  });
+}
+
+function showGroupModal(callback) {
+  const modal = document.getElementById('group-modal');
+  const input = document.getElementById('group-name-input');
+  input.value = '';
+  modal.classList.remove('hidden');
+  input.focus();
+  const confirm = () => {
+    const name = input.value.trim() || 'Group';
+    modal.classList.add('hidden');
+    confirm_btn.removeEventListener('click', confirm);
+    callback(name);
+  };
+  const confirm_btn = document.getElementById('group-confirm-btn');
+  confirm_btn.addEventListener('click', confirm);
+  input.onkeydown = e => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') { modal.classList.add('hidden'); callback(null); } };
+}
+
+function createOverlay() {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;';
+  return d;
+}
+function createModalBox() {
+  const d = document.createElement('div');
+  d.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:360px;width:100%;';
+  return d;
+}
+
+function showColorPicker(currentColor, callback) {
+  const overlay = createOverlay();
+  const box = createModalBox();
+  box.innerHTML = `<p style="margin-bottom:12px;font-size:0.9rem;">Choose group color</p>
+    <div id="cp-pickr-wrap" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div id="cp-pickr-btn" style="width:36px;height:36px;border-radius:6px;background:${currentColor};border:2px solid rgba(255,255,255,0.2);flex-shrink:0;"></div>
+      <span style="font-size:0.8rem;color:var(--text-dim)">Click swatch to open picker, then Save</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="hdr-btn" id="cp-cancel">Cancel</button>
+      <button class="hdr-btn" id="cp-save">Save</button>
+    </div>`;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  let chosenColor = currentColor;
+  const btn = box.querySelector('#cp-pickr-btn');
+
+  requestAnimationFrame(() => {
+    const pickr = Pickr.create({
+      el: btn,
+      theme: 'nano',
+      default: currentColor,
+      swatches: GROUP_COLORS,
+      components: { preview: true, opacity: false, hue: true,
+        interaction: { hex: true, input: true, save: false, clear: false } }
+    });
+    pickr.on('change', color => {
+      chosenColor = color.toHEXA().toString();
+      btn.style.background = chosenColor;
+    });
+
+    const close = () => { pickr.destroyAndRemove(); overlay.remove(); };
+    box.querySelector('#cp-save').onclick = () => { close(); callback(chosenColor); };
+    box.querySelector('#cp-cancel').onclick = close;
+    overlay.onclick = e => { if (e.target === overlay) close(); };
+  });
+}
+
+// Close modals
+document.querySelectorAll('.modal-close').forEach(btn => {
+  btn.addEventListener('click', () => btn.closest('.modal').classList.add('hidden'));
+});
+document.querySelectorAll('.modal').forEach(modal => {
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
 });
 
-// Create overlay element
-const dropOverlay = document.createElement('div');
-dropOverlay.style.position = 'fixed';
-dropOverlay.style.top = 0;
-dropOverlay.style.left = 0;
-dropOverlay.style.width = '100%';
-dropOverlay.style.height = '100%';
-dropOverlay.style.background = 'rgba(0,0,0,0.6)';
-dropOverlay.style.color = '#fff';
-dropOverlay.style.display = 'flex';
-dropOverlay.style.alignItems = 'center';
-dropOverlay.style.justifyContent = 'center';
-dropOverlay.style.fontSize = '32px';
-dropOverlay.style.zIndex = 9999;
-dropOverlay.style.pointerEvents = 'none';
-dropOverlay.style.opacity = 0;
-dropOverlay.style.transition = 'opacity 0.2s ease';
-dropOverlay.textContent = 'Drop to upload images';
-document.body.appendChild(dropOverlay);
+// ── CONTROLS ─────────────────────────────────────────────────────────────────
+document.getElementById('add-tier-btn').onclick = () => {
+  tiers.push(makeTier());
+  saveState(); render();
+};
 
-// Track drag state
-let dragCounter = 0;
+document.getElementById('imageAdder').onclick = () => document.getElementById('imageLoader').click();
+document.getElementById('imageLoader').addEventListener('change', e => {
+  if (e.target.files.length) addImagesFromFiles(e.target.files);
+  e.target.value = '';
+});
+
+document.getElementById('fitToggle').addEventListener('change', e => {
+  fitMode = e.target.checked;
+  applyFitMode();
+  saveState();
+});
+
+function applyFitMode() {
+  document.body.classList.toggle('fit-mode', fitMode);
+  document.getElementById('fitToggle').checked = fitMode;
+}
+
+document.getElementById('pinToggleBtn').onclick = () => {
+  poolPinned = !poolPinned;
+  applyPoolPin();
+  saveState();
+};
+
+function applyPoolPin() {
+  document.body.classList.toggle('pool-unpinned', !poolPinned);
+  document.getElementById('pinToggleBtn').textContent = poolPinned ? '📌 Unpin' : '📌 Pin';
+  document.getElementById('trash-button').style.display = poolPinned ? '' : 'none';
+}
+
+document.getElementById('reset-btn').onclick = async () => {
+  const confirmed = await showConfirm('Reset tierlist? All items and tiers will be removed.');
+  if (!confirmed) return;
+  // Clear images from IndexedDB
+  const db = await getDB();
+  await new Promise(r => { const tx = db.transaction(IMG_STORE, 'readwrite'); tx.objectStore(IMG_STORE).clear(); tx.oncomplete = r; });
+  imageCache.clear();
+  tiers = [
+    makeTier('S', '#ff7f7f'), makeTier('A', '#ffbf7f'), makeTier('B', '#ffdf7f'),
+    makeTier('C', '#ffff7f'), makeTier('D', '#bfff7f'),
+  ];
+  pool = [];
+  selectedIds.clear();
+  saveState(); render();
+};
+
+// ── DRAG-DROP FILES ───────────────────────────────────────────────────────────
+let dragFileCounter = 0;
+const dropOverlay = document.getElementById('drop-overlay');
 
 document.addEventListener('dragenter', e => {
-  dragCounter++;
-  if (e.dataTransfer?.types.includes('Files')) {
-    dropOverlay.style.opacity = 1;
-  }
+  if (!e.dataTransfer?.types.includes('Files')) return;
+  dragFileCounter++;
+  dropOverlay.classList.add('visible');
 });
-
-document.addEventListener('dragleave', e => {
-  dragCounter--;
-  if (dragCounter <= 0) {
-    dropOverlay.style.opacity = 0;
-  }
+document.addEventListener('dragleave', () => {
+  dragFileCounter--;
+  if (dragFileCounter <= 0) { dragFileCounter = 0; dropOverlay.classList.remove('visible'); }
 });
+// During drag, dragover preventDefault kills native wheel scroll — restore it manually
+document.addEventListener('wheel', e => {
+  if (!drag.type) return;
+  const poolEl = getPoolScrollEl();
+  // If mouse is over the pool, scroll pool; otherwise scroll window
+  if (poolEl && poolPinned) {
+    const rect = poolEl.getBoundingClientRect();
+    if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+      poolEl.scrollTop += e.deltaY;
+      return;
+    }
+  }
+  document.body.scrollTop += e.deltaY;
+}, { passive: true });
 
 document.addEventListener('dragover', e => {
   e.preventDefault();
-});
+  e.dataTransfer.dropEffect = 'move';
 
+  // Save scroll position on every dragover — last one before drop has the correct pre-jump value
+
+  // Edge scroll: scroll whichever container the mouse is near the edge of
+  const zone = 60;
+  const speed = 12;
+  const y = e.clientY;
+  const h = window.innerHeight;
+
+  // Check pool first (fixed at bottom when pinned)
+  const poolEl = getPoolScrollEl();
+  if (poolEl && poolPinned) {
+    const rect = poolEl.getBoundingClientRect();
+    if (y >= rect.top && y <= rect.bottom) {
+      if (y < rect.top + zone) poolEl.scrollTop -= speed * (1 - (y - rect.top) / zone);
+      else if (y > rect.bottom - zone) poolEl.scrollTop += speed * (1 - (rect.bottom - y) / zone);
+      return;
+    }
+  }
+
+  // Otherwise scroll window (tiers area, or unpinned layout)
+  if (y < zone) {
+    document.body.scrollTop -= speed * (1 - y / zone);
+  } else if (y > h - zone) {
+    document.body.scrollTop += speed * (1 - (h - y) / zone);
+  }
+});
 document.addEventListener('drop', e => {
   e.preventDefault();
-  dropOverlay.style.opacity = 0;
-  dragCounter = 0;
-
-  const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
-  if (files.length === 0) return;
-
-  const promises = files.map(file => new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const name = file.name.split('.').slice(0, -1).join('.');
-      pool.push(createItem(ev.target.result, null, name));
-      resolve();
-    };
-    reader.readAsDataURL(file);
-  }));
-
-  Promise.all(promises).then(() => {
-    render();
-    saveToLocal();
-  });
+  dragFileCounter = 0;
+  dropOverlay.classList.remove('visible');
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  if (files.length) addImagesFromFiles(files);
 });
 
-function setupItemContextMenu() {
-  document.addEventListener('contextmenu', e => {
-    const itemDiv = e.target.closest('.item');
-    if (!itemDiv) return;
-
-    e.preventDefault();
-    const itemId = itemDiv.dataset.itemId;
-
-    if (!selectedItemIds.has(itemId)) {
-      selectedItemIds.clear();
-      selectedItemIds.add(itemId);
-      lastSelectedItemId = itemId;
+// Clear selection on background click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.item') && !e.target.closest('.group-icon') && !e.target.closest('#context-menu')) {
+    if (selectedIds.size) {
+      selectedIds.clear();
+      document.querySelectorAll('.item.selected').forEach(el => el.classList.remove('selected'));
     }
-
-    showItemContextMenu(e.pageX, e.pageY);
-  });
-
-  document.addEventListener('pointerdown', e => {
-    const isInMenu = e.target.closest('.custom-context-menu');
-    const isContextClick = e.button === 2; // right-click
-    if (!isInMenu && !isContextClick) {
-      removeContextMenu();
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') removeContextMenu();
-  });
-}
-
-function showItemContextMenu(x, y) {
-  removeContextMenu(); // Ensure only one exists
-
-  const menu = document.createElement('div');
-  menu.className = 'custom-context-menu';
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-
-  const renameBtn = document.createElement('div');
-  renameBtn.className = 'context-menu-option';
-  renameBtn.textContent = '📝 Rename';
-  renameBtn.onclick = () => {
-    showRenameModal(Array.from(selectedItemIds));
-    removeContextMenu();
-  };
-  
-  const deleteOption = document.createElement('div');
-  deleteOption.className = 'context-menu-option delete';
-  deleteOption.textContent = '🗑️ Delete';
-  deleteOption.addEventListener('click', () => {
-    removeContextMenu();
-    if (confirm(`Delete ${selectedItemIds.size} image(s)?`)) {
-      for (const id of selectedItemIds) {
-        // Try to delete from tiers
-        for (const tier of tiers) {
-          const index = tier.items.findIndex(item => item.id === id);
-          if (index !== -1) {
-            tier.items.splice(index, 1);
-          }
-        }
-
-        // Try to delete from pool
-        const poolIndex = pool.findIndex(item => item.id === id);
-        if (poolIndex !== -1) {
-          pool.splice(poolIndex, 1);
-        }
-      }
-      selectedItemIds.clear();
-      render();
-      saveToLocal();
-    }
-  });
-
-
-  menu.appendChild(renameBtn);
-  menu.appendChild(deleteOption);
-
-  document.body.appendChild(menu);
-}
-
-function removeContextMenu() {
-  const existing = document.querySelector('.custom-context-menu');
-  if (existing) existing.remove();
-}
-
-function showRenameModal(itemIds) {
-  const modal = document.createElement('div');
-  modal.className = 'rename-modal-overlay';
-  modal.innerHTML = `
-    <div class="rename-modal">
-      <h3>Rename ${itemIds.length > 1 ? 'Items' : 'Item'}</h3>
-      <textarea class="rename-textarea">${itemIds.map(id => findItemById(id)?.name || '').join(', ')}</textarea>
-      <div class="rename-buttons">
-        <button class="rename-confirm">Rename</button>
-        <button class="rename-cancel">Cancel</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-
-  modal.querySelector('.rename-cancel').onclick = () => modal.remove();
-
-  modal.querySelector('.rename-confirm').onclick = () => {
-    const inputText = modal.querySelector('.rename-textarea').value;
-    const newNames = inputText.split(',').map(n => n.trim());
-    itemIds.forEach((id, idx) => {
-      const item = findItemById(id);
-      if (item && newNames[idx]) item.name = newNames[idx];
-    });
-    modal.remove();
-    render();
-    saveToLocal();
-  };
-}
-
-function findItemById(id) {
-  for (const tier of tiers) {
-    const item = tier.items.find(i => i.id === id);
-    if (item) return item;
   }
-  return pool.find(i => i.id === id) || null;
-}
+});
 
-
-
-loadFromLocal();
-setupItemContextMenu();
+// ── INIT ─────────────────────────────────────────────────────────────────────
+loadState();

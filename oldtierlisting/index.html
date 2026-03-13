@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tierlisting</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="tiers"></div>
+
+<button id="pinToggleBtn">📌 Pin</button>
+
+<div id="image-pool" title="Image Pool (Drag images from here to tiers)"></div>
+
+<div id="export-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Export Tierlist</h2>
+      <span class="modal-close" title="Close">&times;</span>
+    </div>
+	<img id="exportPreviewImage" style="max-width: 100%; max-height: 300px; display: block; margin-bottom: 10px;" alt="Export preview" />
+	<label>
+	  Scale:
+	  <input type="number" id="exportScale" min="1" max="10" step="1" value="1" />
+	</label>
+	<label>
+	  <input type="checkbox" id="exportTransparent" />
+	  Transparent Background
+	</label>
+    <div class="modal-body">
+      <button id="download-png">Download</button>
+    </div>
+  </div>
+</div>
+
+<div id="rename-modal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Rename Item(s)</h3>
+    <input id="rename-input" type="text" style="width: 100%; margin-bottom: 10px;" />
+    <div>
+      <button id="rename-confirm">OK</button>
+      <button id="rename-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="controls">
+  <button id="imageAdder">Add Images</button>
+  <button id="exportImageBtn">Save an Image</button>
+  <button id="export-btn">Export JSON</button>
+  <button id="import-btn">Import JSON</button>
+  <!-- Right-aligned group -->
+  <div class="controls-right">
+    <button id="reset-btn" class="danger-button">Reset</button>
+    <div id="trash-button" title="Drag here to delete" class="drop-trash">🗑️</div>
+  </div>
+  <input type="file" id="imageLoader" style="display:none" multiple accept="image/*" title="Load Images" />
+  <input type="file" id="import-json" style="display:none" accept="application/json" />
+</div>
+
+<!-- Pickr CSS (Nano theme) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" />
+
+<!-- Pickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+
+
+<script src="app.js"></script>
+</body>
+</html>
