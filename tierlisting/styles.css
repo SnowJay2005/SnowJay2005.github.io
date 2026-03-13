@@ -130,26 +130,30 @@ html, body {
 .tier-label {
   width: 90px;
   flex-shrink: 0;
+  align-self: stretch;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
+  align-items: stretch;
   position: relative;
 }
 
-.tier-label textarea {
-  all: unset;
-  width: 100%;
+.tier-label-text {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   font-family: 'Space Mono', monospace;
   font-size: 0.9rem;
   font-weight: 700;
   color: rgba(0,0,0,0.75);
-  resize: none;
-  overflow: hidden;
   word-break: break-word;
   cursor: text;
   line-height: 1.3;
+  outline: none;
+  padding: 6px;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .tier-items-container {
@@ -214,6 +218,7 @@ html, body {
   border-radius: 3px;
   overflow: hidden;
   flex-shrink: 0;
+  user-select: none;
 }
 
 body.fit-mode .item {
@@ -471,24 +476,11 @@ body.pool-unpinned #app-body {
 
 /* ── TRASH ── */
 #trash-button {
-  position: fixed;
-  bottom: calc(var(--pool-h) + 10px);
-  right: 14px;
-  width: 44px;
-  height: 44px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg2);
-  cursor: pointer;
-  z-index: 101;
+  border: 1px dashed var(--border) !important;
+  font-size: 14px;
   transition: border-color 0.15s, background 0.15s;
 }
-#trash-button.drag-over { border-color: var(--danger); background: #1f1010; }
-body.pool-unpinned #trash-button { bottom: 10px; }
+#trash-button.drag-over { border-color: var(--danger) !important; background: #1f1010 !important; color: var(--danger); }
 
 /* ── MODALS ── */
 .modal {
@@ -640,3 +632,42 @@ body.pool-unpinned #trash-button { bottom: 10px; }
 
 /* ── PICKR OVERRIDES ── */
 .pcr-swatches { display: flex; flex-wrap: wrap; max-width: 200px; gap: 4px; }
+
+/* ── DRAG GHOST ── */
+.drag-ghost {
+  pointer-events: none;
+  position: fixed;
+  z-index: 9999;
+  opacity: 0.75;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.drag-ghost .item {
+  pointer-events: none;
+  opacity: 1 !important;
+}
+
+/* ── SEARCH ── */
+#searchInput {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  padding: 4px 8px;
+  width: 140px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+#searchInput:focus { border-color: var(--accent); }
+#searchInput::placeholder { color: var(--text-dim); }
+
+.item.search-dim {
+  opacity: 0.15;
+  filter: grayscale(1);
+}
+
+/* ── UNDO/REDO ── */
+#undoBtn:disabled, #redoBtn:disabled { opacity: 0.35; cursor: default; }

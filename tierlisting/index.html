@@ -16,6 +16,8 @@
     <span id="app-title">TIER<span class="accent">LIST</span></span>
   </div>
   <div id="header-right">
+    <button id="undoBtn" class="hdr-btn" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
+    <button id="redoBtn" class="hdr-btn" title="Redo (Ctrl+Y)" disabled>↪ Redo</button>
     <button id="imageAdder" class="hdr-btn" title="Add Images">+ Images</button>
     <button id="exportImageBtn" class="hdr-btn" title="Export as PNG">Export PNG</button>
     <button id="export-btn" class="hdr-btn" title="Export JSON">Export JSON</button>
@@ -35,18 +37,18 @@
   <div id="pool-header">
     <span id="pool-title">Image Pool</span>
     <div id="pool-header-right">
+      <input type="search" id="searchInput" placeholder="Search…" autocomplete="off" />
       <label class="fit-toggle">
         <input type="checkbox" id="fitToggle" />
         <span>Fit mode</span>
       </label>
+      <button id="sortPoolBtn" class="hdr-btn small" title="Sort pool A-Z">A-Z (Off)</button>
+      <button id="trash-button" class="hdr-btn small" title="Drag items here to delete">🗑</button>
       <button id="pinToggleBtn" class="hdr-btn small">📌 Pin</button>
     </div>
   </div>
   <div id="image-pool"></div>
 </div>
-
-<!-- Trash -->
-<div id="trash-button" title="Drag here to delete">🗑</div>
 
 <!-- Export modal -->
 <div id="export-modal" class="modal hidden">

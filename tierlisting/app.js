@@ -107,13 +107,7 @@ async function render() {
     els.forEach(el => poolEl.appendChild(el));
   }
 
-  // Pool accepts item and group drops
-  poolEl.ondragover = e => { if (drag.type === 'item' || drag.type === 'group') e.preventDefault(); };
-  poolEl.ondrop = e => {
-    e.preventDefault();
-    if (drag.type === 'item') dropItems([...selectedIds], null, drag.insertBeforeId, drag.insertAfter, null);
-    else if (drag.type === 'group') dropGroup(drag.id, null, drag.insertBeforeId, drag.insertAfter);
-  };
+  // Pool drop is handled by global pointer system
 
   isRendering = false;
   if (renderPending) render();
@@ -123,10 +117,6 @@ async function render() {
     document.body.scrollTop = scrollY;
     const pe = getPoolScrollEl();
     if (pe) pe.scrollTop = poolScrollY;
-    document.querySelectorAll('.tier-label textarea').forEach(ta => {
-      ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
-    });
   });
 }
 
@@ -152,7 +142,6 @@ async function rerenderTierItems(tierId) {
     const pe = getPoolScrollEl();
     if (pe) pe.scrollTop = poolScrollY;
   });
-  saveState();
 }
 
 // ── DRAG STATE ───────────────────────────────────────────────────────────────
@@ -175,19 +164,452 @@ function resetDrag() {
   drag.type = null; drag.id = null; drag.fromTierId = null;
   drag.fromGroupId = null; drag.insertBeforeId = null;
   drag.insertAfter = false; drag.insertTierBeforeId = null;
+  drag._overTrash = false; drag._dropIntoGroupId = null;
+  drag._dropToTierId = null; drag._dropToPool = false;
   drag.el?.classList.remove('dragging');
   drag.el = null;
   clearInsertionMarkers();
 }
 
+// ── POINTER DRAG ENGINE ───────────────────────────────────────────────────────
+let dragGhost = null;
+let ghostOffsetX = 0;
+let ghostOffsetY = 0;
+let edgeScrollRaf = null;
+let lastPointerX = 0;
+let lastPointerY = 0;
+
+function startDrag(e, type, id, fromTierId, fromGroupId, el) {
+  hideTooltip();
+  drag.type = type;
+  drag.id = id;
+  drag.fromTierId = fromTierId;
+  drag.fromGroupId = fromGroupId;
+  drag.el = el;
+  el.classList.add('dragging');
+
+  // Build ghost
+  dragGhost = document.createElement('div');
+  dragGhost.className = 'drag-ghost';
+  const rect = el.getBoundingClientRect();
+  ghostOffsetX = e.clientX - rect.left;
+  ghostOffsetY = e.clientY - rect.top;
+
+  if (type === 'item') {
+    // Show count badge if multiple selected
+    const count = selectedIds.size;
+    if (count > 1) {
+      dragGhost.style.width = rect.width + 'px';
+      dragGhost.style.height = rect.height + 'px';
+      dragGhost.style.background = 'var(--item-bg)';
+      dragGhost.style.border = '1px solid var(--accent)';
+      dragGhost.style.borderRadius = 'var(--radius)';
+      dragGhost.style.display = 'flex';
+      dragGhost.style.alignItems = 'center';
+      dragGhost.style.justifyContent = 'center';
+      dragGhost.style.fontSize = '1.2rem';
+      dragGhost.style.fontWeight = 'bold';
+      dragGhost.style.color = 'var(--accent)';
+      dragGhost.textContent = `×${count}`;
+    } else {
+      const clone = el.cloneNode(true);
+      clone.style.width = rect.width + 'px';
+      clone.style.height = rect.height + 'px';
+      dragGhost.appendChild(clone);
+    }
+  } else if (type === 'group') {
+    const clone = el.cloneNode(true);
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+    dragGhost.appendChild(clone);
+  } else if (type === 'tier') {
+    dragGhost.style.width = '200px';
+    dragGhost.style.padding = '8px 16px';
+    dragGhost.style.background = 'var(--item-bg)';
+    dragGhost.style.border = '1px solid var(--accent)';
+    dragGhost.style.borderRadius = 'var(--radius)';
+    dragGhost.style.color = 'var(--text)';
+    dragGhost.style.fontSize = '0.9rem';
+    const tierObj = tiers.find(t => t.id === id);
+    dragGhost.textContent = tierObj ? `Tier: ${tierObj.name}` : 'Tier';
+  }
+
+  dragGhost.style.position = 'fixed';
+  dragGhost.style.pointerEvents = 'none';
+  dragGhost.style.opacity = '0.75';
+  dragGhost.style.zIndex = '9999';
+  dragGhost.style.left = (e.clientX - ghostOffsetX) + 'px';
+  dragGhost.style.top = (e.clientY - ghostOffsetY) + 'px';
+  document.body.appendChild(dragGhost);
+
+  document.body.style.userSelect = 'none';
+  document.addEventListener('pointermove', onPointerMove);
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('keydown', onDragKeyDown);
+  startEdgeScroll();
+}
+
+function onPointerMove(e) {
+  lastPointerX = e.clientX;
+  lastPointerY = e.clientY;
+
+  // Move ghost
+  if (dragGhost) {
+    dragGhost.style.left = (e.clientX - ghostOffsetX) + 'px';
+    dragGhost.style.top = (e.clientY - ghostOffsetY) + 'px';
+  }
+
+  if (drag.type === 'tier') {
+    hitTestTier(e.clientX, e.clientY);
+  } else if (drag.type === 'item' || drag.type === 'group') {
+    hitTestItemOrGroup(e.clientX, e.clientY);
+  }
+}
+
+function hitTestTier(x, y) {
+  clearInsertionMarkers();
+  // Hide ghost so elementFromPoint works
+  if (dragGhost) dragGhost.style.display = 'none';
+  const el = document.elementFromPoint(x, y);
+  if (dragGhost) dragGhost.style.display = '';
+  if (!el) return;
+
+  const tierDiv = el.closest('.tier');
+  if (!tierDiv) return;
+  const tierId = tierDiv.dataset.tierId;
+  if (!tierId || tierId === drag.id) return;
+
+  const rect = tierDiv.getBoundingClientRect();
+  if (y < rect.top + rect.height / 2) {
+    tierDiv.classList.add('drag-target-above');
+    drag.insertTierBeforeId = tierId;
+  } else {
+    tierDiv.classList.add('drag-target-below');
+    drag.insertTierBeforeId = tierId + '__below';
+  }
+}
+
+function hitTestItemOrGroup(x, y) {
+  clearInsertionMarkers();
+  document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+  if (dragGhost) dragGhost.style.display = 'none';
+  const el = document.elementFromPoint(x, y);
+  if (dragGhost) dragGhost.style.display = '';
+  if (!el) return;
+
+  // Check trash first
+  if (el.closest('[data-trash]')) {
+    document.querySelector('[data-trash]')?.classList.add('drag-over');
+    drag.insertBeforeId = null;
+    drag.insertAfter = false;
+    drag._overTrash = true;
+    return;
+  }
+  drag._overTrash = false;
+  document.querySelector('[data-trash]')?.classList.remove('drag-over');
+
+  // Hit test item — only register if pointer is directly over an item element, not gaps
+  const itemEl = el.closest('.item');
+  if (itemEl) {
+    const itemRect = itemEl.getBoundingClientRect();
+    // Strict hitbox: must be within item bounds (no gap between items)
+    if (x >= itemRect.left && x <= itemRect.right && y >= itemRect.top && y <= itemRect.bottom) {
+      const refId = itemEl.dataset.itemId;
+      if (refId === drag.id) return; // self
+      if (x < itemRect.left + itemRect.width / 2) {
+        itemEl.classList.add('insert-before');
+        drag.insertBeforeId = refId;
+        drag.insertAfter = false;
+      } else {
+        itemEl.classList.add('insert-after');
+        drag.insertBeforeId = refId;
+        drag.insertAfter = true;
+      }
+      return;
+    }
+  }
+
+  // Hit test group icon
+  const groupIconEl = el.closest('.group-icon');
+  if (groupIconEl && !groupIconEl.closest('.group-bracket')?.classList.contains('dragging')) {
+    const groupId = groupIconEl.dataset.groupId;
+    if (groupId === drag.id) return;
+    const target = groupIconEl._bracket || groupIconEl;
+    const rect = target.getBoundingClientRect();
+    if (x < rect.left + rect.width / 2) {
+      target.classList.add('insert-before');
+      drag.insertBeforeId = groupId;
+      drag.insertAfter = false;
+    } else {
+      target.classList.add('insert-after');
+      drag.insertBeforeId = groupId;
+      drag.insertAfter = true;
+    }
+    return;
+  }
+
+  // Hit test bracket interior (drop into group)
+  const bracketEl = el.closest('.group-bracket');
+  if (bracketEl && drag.type === 'item') {
+    const bracketGroupId = bracketEl.dataset.groupId;
+    if (bracketGroupId) {
+      bracketEl.classList.add('drop-target');
+      drag.insertBeforeId = null;
+      drag._dropIntoGroupId = bracketGroupId;
+      return;
+    }
+  }
+  drag._dropIntoGroupId = null;
+
+  // Fell through — pointer is in a gap. Find the nearest item/group in the same container
+  // and snap to its nearest edge, so gaps are never dead zones.
+  const container = el.closest('.tier-items-container, #image-pool');
+  if (!container) return;
+
+  const candidates = [...container.querySelectorAll('.item, .group-icon:not(.group-bracket .group-icon), .group-bracket')];
+  if (!candidates.length) return; // empty container — append is fine, handled by commitItemOrGroupDrop
+
+  let best = null;
+  let bestDist = Infinity;
+  for (const c of candidates) {
+    const r = c.getBoundingClientRect();
+    // Distance to nearest edge of this element
+    const dx = Math.max(r.left - x, 0, x - r.right);
+    const dy = Math.max(r.top - y, 0, y - r.bottom);
+    const dist = Math.hypot(dx, dy);
+    if (dist < bestDist) { bestDist = dist; best = c; }
+  }
+  if (!best) return;
+
+  const bestRect = best.getBoundingClientRect();
+  const refId = best.dataset.itemId || best.dataset.groupId;
+  if (!refId || refId === drag.id) return;
+
+  const target = best.classList.contains('group-icon') ? (best._bracket || best) : best;
+  if (x < bestRect.left + bestRect.width / 2) {
+    target.classList.add('insert-before');
+    drag.insertBeforeId = refId;
+    drag.insertAfter = false;
+  } else {
+    target.classList.add('insert-after');
+    drag.insertBeforeId = refId;
+    drag.insertAfter = true;
+  }
+}
+
+function onPointerUp(e) {
+  document.removeEventListener('pointermove', onPointerMove);
+  document.removeEventListener('pointerup', onPointerUp);
+  document.removeEventListener('keydown', onDragKeyDown);
+  stopEdgeScroll();
+  document.body.style.userSelect = '';
+
+  if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+  document.querySelector('[data-trash]')?.classList.remove('drag-over');
+  document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+
+  if (!drag.type) return;
+
+  if (drag.type === 'tier') {
+    commitTierDrop();
+  } else if (drag.type === 'item' || drag.type === 'group') {
+    commitItemOrGroupDrop(e);
+  }
+}
+
+function onDragKeyDown(e) {
+  if (e.key === 'Escape') {
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('keydown', onDragKeyDown);
+    stopEdgeScroll();
+    document.body.style.userSelect = '';
+    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    document.querySelector('[data-trash]')?.classList.remove('drag-over');
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    resetDrag();
+  }
+}
+
+function commitTierDrop() {
+  if (!drag.id) { resetDrag(); return; }
+  const fromIdx = tiers.findIndex(t => t.id === drag.id);
+  if (fromIdx === -1) { resetDrag(); return; }
+  let toIdx;
+  if (!drag.insertTierBeforeId) {
+    resetDrag(); return; // no valid target
+  } else if (drag.insertTierBeforeId.endsWith('__below')) {
+    const refId = drag.insertTierBeforeId.replace('__below', '');
+    toIdx = tiers.findIndex(t => t.id === refId) + 1;
+  } else {
+    toIdx = tiers.findIndex(t => t.id === drag.insertTierBeforeId);
+  }
+  if (toIdx < 0) toIdx = tiers.length;
+  const [moved] = tiers.splice(fromIdx, 1);
+  if (toIdx > fromIdx) toIdx--;
+  tiers.splice(toIdx, 0, moved);
+  saveState(); drag.id = null; resetDrag(); render();
+}
+
+async function commitItemOrGroupDrop(e) {
+  // Trash — check both the flag and direct hit test as fallback
+  const trashEl = document.querySelector('[data-trash]');
+  if (trashEl) {
+    const trashRect = trashEl.getBoundingClientRect();
+    if (e.clientX >= trashRect.left && e.clientX <= trashRect.right &&
+        e.clientY >= trashRect.top && e.clientY <= trashRect.bottom) {
+      drag._overTrash = true;
+    }
+  }
+
+  if (drag._overTrash) {
+    drag._overTrash = false;
+    if (!selectedIds.size) { resetDrag(); return; }
+    const toDelete = [...selectedIds]; // snapshot before await
+    const confirmed = await showConfirm(`Delete ${toDelete.length} item(s)?`);
+    if (!confirmed) { resetDrag(); return; }
+    for (const id of toDelete) {
+      await deleteImage(id);
+      removeFromContainer(id);
+      selectedIds.delete(id);
+    }
+    saveState(); resetDrag(); render();
+    return;
+  }
+
+  // Determine which tier we're over by hit testing the items container
+  if (dragGhost) dragGhost.style.display = 'none';
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (dragGhost) dragGhost.style.display = '';
+
+  // Find target tier from element under pointer
+  let toTierId = null;
+  if (el) {
+    const tierContainer = el.closest('.tier-items-container');
+    if (tierContainer) toTierId = tierContainer.dataset.tierId || null;
+    else {
+      const tierDiv = el.closest('.tier');
+      if (tierDiv) toTierId = tierDiv.dataset.tierId || null;
+    }
+    // Pool
+    if (el.closest('#image-pool') || el.closest('#pool-wrapper')) toTierId = null;
+  }
+
+  // Drop into group bracket
+  const dropIntoGroupId = drag._dropIntoGroupId;
+  drag._dropIntoGroupId = null;
+  if (dropIntoGroupId && drag.type === 'item') {
+    dropItems([...selectedIds], toTierId, null, false, dropIntoGroupId);
+    return;
+  }
+
+  if (drag.type === 'item') {
+    const movingToSamePlace = !drag.insertBeforeId && toTierId === drag.fromTierId;
+    if (movingToSamePlace) { resetDrag(); return; }
+    dropItems([...selectedIds], toTierId, drag.insertBeforeId, drag.insertAfter, null);
+  } else if (drag.type === 'group') {
+    if (!drag.insertBeforeId) { resetDrag(); return; }
+    dropGroup(drag.id, toTierId, drag.insertBeforeId, drag.insertAfter);
+  }
+}
+
+function startEdgeScroll() {
+  function frame() {
+    if (!drag.type) return;
+    const zone = 80;
+    const maxSpeed = 16;
+    const y = lastPointerY;
+    const h = window.innerHeight;
+    const poolEl = getPoolScrollEl();
+
+    // Pool edge scroll when pinned
+    if (poolEl && poolPinned) {
+      const rect = poolEl.getBoundingClientRect();
+      if (y >= rect.top && y <= rect.bottom) {
+        if (y < rect.top + zone) {
+          poolEl.scrollTop -= maxSpeed * (1 - (y - rect.top) / zone);
+        } else if (y > rect.bottom - zone) {
+          poolEl.scrollTop += maxSpeed * (1 - (rect.bottom - y) / zone);
+        }
+        edgeScrollRaf = requestAnimationFrame(frame);
+        return;
+      }
+    }
+
+    // Window edge scroll
+    if (y < zone) {
+      document.body.scrollTop -= maxSpeed * (1 - y / zone);
+    } else if (y > h - zone) {
+      document.body.scrollTop += maxSpeed * (1 - (h - y) / zone);
+    }
+    edgeScrollRaf = requestAnimationFrame(frame);
+  }
+  edgeScrollRaf = requestAnimationFrame(frame);
+}
+
+function stopEdgeScroll() {
+  if (edgeScrollRaf) { cancelAnimationFrame(edgeScrollRaf); edgeScrollRaf = null; }
+}
+
+// ── UNDO / REDO ───────────────────────────────────────────────────────────────
+const HISTORY_LIMIT = 50;
+let history = [];
+let historyIndex = -1;
+let _skipHistory = false;
+
+function snapshotState() {
+  return JSON.stringify({ tiers, pool });
+}
+
+function pushHistory() {
+  if (_skipHistory) return;
+  // Drop any redo states ahead of current position
+  history = history.slice(0, historyIndex + 1);
+  history.push(snapshotState());
+  if (history.length > HISTORY_LIMIT) history.shift();
+  historyIndex = history.length - 1;
+  updateUndoRedoBtns();
+}
+
+function applyHistoryState(snapshot) {
+  const d = JSON.parse(snapshot);
+  tiers = d.tiers;
+  pool = d.pool;
+  _skipHistory = true;
+  saveState();
+  _skipHistory = false;
+  render();
+}
+
+function undo() {
+  if (historyIndex <= 0) return;
+  historyIndex--;
+  applyHistoryState(history[historyIndex]);
+  updateUndoRedoBtns();
+}
+
+function redo() {
+  if (historyIndex >= history.length - 1) return;
+  historyIndex++;
+  applyHistoryState(history[historyIndex]);
+  updateUndoRedoBtns();
+}
+
+function updateUndoRedoBtns() {
+  document.getElementById('undoBtn').disabled = historyIndex <= 0;
+  document.getElementById('redoBtn').disabled = historyIndex >= history.length - 1;
+}
+
 // ── PERSISTENCE ──────────────────────────────────────────────────────────────
 function saveState() {
+  pushHistory();
   try {
     localStorage.setItem('tierlistState_v2', JSON.stringify({ tiers, pool, fitMode, poolPinned }));
   } catch(e) { console.warn('Save failed:', e); }
 }
 
 async function loadState() {
+  _skipHistory = true;
   // Try new format
   const raw = localStorage.getItem('tierlistState_v2');
   if (raw) {
@@ -200,6 +622,8 @@ async function loadState() {
       applyFitMode();
       applyPoolPin();
       await render();
+      _skipHistory = false;
+      pushHistory();
       return;
     } catch(e) { console.warn('New state load failed:', e); }
   }
@@ -209,7 +633,6 @@ async function loadState() {
   if (oldRaw) {
     try {
       const d = JSON.parse(oldRaw);
-      // Old format had base64 in item.src, items had id/src/name
       const oldTiers = d.tiers || [];
       const oldPool = d.pool || [];
 
@@ -232,6 +655,7 @@ async function loadState() {
         pool.push({ type: 'item', id, name: oi.name || '' });
       }
 
+      _skipHistory = false;
       saveState();
       await render();
       return;
@@ -247,6 +671,7 @@ async function loadState() {
     makeTier('D', '#bfff7f'),
   ];
   pool = [];
+  _skipHistory = false;
   saveState();
   await render();
 }
@@ -343,25 +768,27 @@ async function buildTierEl(tier) {
   const handle = document.createElement('div');
   handle.className = 'grab-handle';
   handle.innerHTML = '⠿';
-  handle.draggable = true;
-  handle.addEventListener('dragstart', e => {
-    drag.type = 'tier';
-    drag.id = tier.id;
-    e.dataTransfer.effectAllowed = 'move';
+  handle.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    startDrag(e, 'tier', tier.id, null, null, handle);
   });
 
   // Label
   const labelDiv = document.createElement('div');
   labelDiv.className = 'tier-label';
   labelDiv.style.backgroundColor = tier.color;
-  const ta = document.createElement('textarea');
-  ta.value = tier.name;
-  ta.rows = 1;
+  const ta = document.createElement('div');
+  ta.className = 'tier-label-text';
+  ta.contentEditable = 'true';
+  ta.textContent = tier.name;
   ta.addEventListener('input', () => {
-    tier.name = ta.value;
-    ta.style.height = 'auto';
-    ta.style.height = ta.scrollHeight + 'px';
+    tier.name = ta.textContent;
     saveState();
+  });
+  // Prevent newlines
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); ta.blur(); }
   });
   labelDiv.appendChild(ta);
 
@@ -422,41 +849,8 @@ async function buildTierEl(tier) {
   tierDiv.appendChild(itemsCont);
   tierDiv.appendChild(actions);
 
-  // Tier drag-over for reordering
-  tierDiv.addEventListener('dragover', e => {
-    if (drag.type !== 'tier') return;
-    e.preventDefault();
-    const rect = tierDiv.getBoundingClientRect();
-    clearInsertionMarkers();
-    if (e.clientY < rect.top + rect.height / 2) {
-      tierDiv.classList.add('drag-target-above');
-      drag.insertTierBeforeId = tier.id;
-    } else {
-      tierDiv.classList.add('drag-target-below');
-      drag.insertTierBeforeId = tier.id + '__below';
-    }
-  });
-
-  tierDiv.addEventListener('drop', e => {
-    if (drag.type !== 'tier' || !drag.id) return;
-    e.preventDefault();
-    const fromIdx = tiers.findIndex(t => t.id === drag.id);
-    if (fromIdx === -1) { resetDrag(); return; }
-    let toIdx;
-    if (!drag.insertTierBeforeId) {
-      toIdx = tiers.length;
-    } else if (drag.insertTierBeforeId.endsWith('__below')) {
-      const refId = drag.insertTierBeforeId.replace('__below', '');
-      toIdx = tiers.findIndex(t => t.id === refId) + 1;
-    } else {
-      toIdx = tiers.findIndex(t => t.id === drag.insertTierBeforeId);
-    }
-    if (toIdx < 0) toIdx = tiers.length;
-    const [moved] = tiers.splice(fromIdx, 1);
-    if (toIdx > fromIdx) toIdx--;
-    tiers.splice(toIdx, 0, moved);
-    saveState(); drag.id = null; resetDrag(); render();
-  });
+  tierDiv.dataset.tierId = tier.id;
+  // Tier reorder drop is handled by global pointermove hit testing
 
   // Setup color picker after appending
   requestAnimationFrame(() => {
@@ -501,25 +895,8 @@ async function buildRefEls(ref, tierId) {
     bracket.appendChild(iconEl);
     itemEls.forEach(el => bracket.appendChild(el));
 
-    // Bracket: highlight when an item is dragged over the empty area (not over child items)
-    bracket.addEventListener('dragover', e => {
-      if (drag.type !== 'item' && drag.type !== 'group') return;
-      if (e.target.closest('.item')) return; // child items handle themselves
-      e.preventDefault();
-      if (drag.type === 'item') {
-        bracket.classList.add('drop-target');
-        drag.insertBeforeId = null;
-      }
-    });
-    bracket.addEventListener('dragleave', e => {
-      if (!bracket.contains(e.relatedTarget)) bracket.classList.remove('drop-target');
-    });
-    bracket.addEventListener('drop', e => {
-      bracket.classList.remove('drop-target');
-      if (drag.type !== 'item') return;
-      e.preventDefault(); e.stopPropagation();
-      dropItems([...selectedIds], tierId, null, false, ref.id);
-    });
+    // Bracket drop-into-group is handled by global pointermove hit testing
+    bracket.dataset.groupId = ref.id;
 
     // Pass bracket to icon so dragstart can mark it
     iconEl._bracket = bracket;
@@ -533,7 +910,6 @@ async function buildItemEl(ref, tierId, groupId) {
   const div = document.createElement('div');
   div.className = 'item';
   div.dataset.itemId = ref.id;
-  div.draggable = true;
 
   if (selectedIds.has(ref.id)) div.classList.add('selected');
 
@@ -549,56 +925,36 @@ async function buildItemEl(ref, tierId, groupId) {
     div.addEventListener('mouseleave', hideTooltip);
   }
 
-  div.addEventListener('click', e => { e.stopPropagation(); toggleSelect(ref.id, e); });
+  div.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleSelect(ref.id, e); });
 
-  div.addEventListener('dragstart', e => {
-    hideTooltip();
-    if (!selectedIds.has(ref.id)) {
-      selectedIds.clear();
-      selectedIds.add(ref.id);
-      lastSelectedId = ref.id;
-    }
-    drag.type = 'item';
-    drag.id = ref.id;
-    drag.fromTierId = tierId;
-    drag.fromGroupId = groupId;
-    drag.el = div;
-    div.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-  });
-
-  div.addEventListener('dragend', () => {
-    // Only render if drop didn't happen (e.g. drag was cancelled)
-    // dropItems() handles render on successful drops
-    if (drag.id !== null) { resetDrag(); render(); }
-    else { resetDrag(); }
-  });
-
-  div.addEventListener('dragover', e => {
-    if (drag.type !== 'item' && drag.type !== 'group') return;
-    e.preventDefault(); e.stopPropagation();
-    const rect = div.getBoundingClientRect();
-    clearInsertionMarkers();
-    if (e.clientX < rect.left + rect.width / 2) {
-      div.classList.add('insert-before');
-      drag.insertBeforeId = ref.id;
-      drag.insertAfter = false;
-    } else {
-      div.classList.add('insert-after');
-      drag.insertBeforeId = ref.id;
-      drag.insertAfter = true;
-    }
-  });
-
-  div.addEventListener('dragleave', clearInsertionMarkers);
-
-  div.addEventListener('drop', e => {
-    e.preventDefault(); e.stopPropagation();
-    if (drag.type === 'item') {
-      dropItems([...selectedIds], tierId, drag.insertBeforeId, drag.insertAfter, groupId);
-    } else if (drag.type === 'group') {
-      dropGroup(drag.id, tierId, drag.insertBeforeId, drag.insertAfter);
-    }
+  div.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    // Don't start drag immediately — wait for pointermove threshold
+    // to distinguish click from drag
+    div._pointerDownAt = { x: e.clientX, y: e.clientY, e };
+    div._pointerMoveHandler = (moveE) => {
+      if (!div._pointerDownAt) return;
+      const dx = moveE.clientX - div._pointerDownAt.x;
+      const dy = moveE.clientY - div._pointerDownAt.y;
+      if (Math.hypot(dx, dy) > 4) {
+        document.removeEventListener('pointermove', div._pointerMoveHandler);
+        div._pointerDownAt = null;
+        if (!selectedIds.has(ref.id)) {
+          selectedIds.clear();
+          selectedIds.add(ref.id);
+          lastSelectedId = ref.id;
+          document.querySelectorAll('.item').forEach(el => {
+            el.classList.toggle('selected', selectedIds.has(el.dataset.itemId));
+          });
+        }
+        startDrag(moveE, 'item', ref.id, tierId, groupId, div);
+      }
+    };
+    document.addEventListener('pointermove', div._pointerMoveHandler);
+    document.addEventListener('pointerup', () => {
+      document.removeEventListener('pointermove', div._pointerMoveHandler);
+      div._pointerDownAt = null;
+    }, { once: true });
   });
 
   return div;
@@ -634,55 +990,29 @@ async function buildGroupIconEl(group, tierId) {
   div.addEventListener('click', e => {
     if (e.defaultPrevented) return;
     group.collapsed = !group.collapsed;
+    saveState();
     rerenderTierItems(tierId);
   });
 
   // Drag the group icon to move it
-  div.draggable = true;
-  div.addEventListener('dragstart', e => {
-    hideTooltip();
-    drag.type = 'group';
-    drag.id = group.id;
-    drag.fromTierId = tierId;
-    drag.el = div;
-    const bracket = div._bracket || div;
-    bracket.classList.add('dragging');
-    div.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.stopPropagation();
-  });
-  div.addEventListener('dragend', () => {
-    if (drag.id !== null) { resetDrag(); render(); }
-    else resetDrag();
-  });
-
-  // Dragover on icon: show insertion marker on bracket (or icon if collapsed)
-  div.addEventListener('dragover', e => {
-    if (drag.type !== 'item' && drag.type !== 'group') return;
-    e.preventDefault(); e.stopPropagation();
-    const target = div._bracket || div;
-    const rect = target.getBoundingClientRect();
-    clearInsertionMarkers();
-    if (e.clientX < rect.left + rect.width / 2) {
-      target.classList.add('insert-before');
-      drag.insertBeforeId = group.id;
-      drag.insertAfter = false;
-    } else {
-      target.classList.add('insert-after');
-      drag.insertBeforeId = group.id;
-      drag.insertAfter = true;
-    }
-  });
-  div.addEventListener('dragleave', e => {
-    if (!div.contains(e.relatedTarget)) clearInsertionMarkers();
-  });
-  div.addEventListener('drop', e => {
-    e.preventDefault(); e.stopPropagation();
-    if (drag.type === 'item') {
-      dropItems([...selectedIds], tierId, drag.insertBeforeId, drag.insertAfter, null);
-    } else if (drag.type === 'group' && drag.id !== group.id) {
-      dropGroup(drag.id, tierId, drag.insertBeforeId, drag.insertAfter);
-    }
+  div.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    div._pointerDownAt = { x: e.clientX, y: e.clientY };
+    div._pointerMoveHandler = (moveE) => {
+      if (!div._pointerDownAt) return;
+      const dx = moveE.clientX - div._pointerDownAt.x;
+      const dy = moveE.clientY - div._pointerDownAt.y;
+      if (Math.hypot(dx, dy) > 4) {
+        document.removeEventListener('pointermove', div._pointerMoveHandler);
+        div._pointerDownAt = null;
+        startDrag(moveE, 'group', group.id, tierId, null, div);
+      }
+    };
+    document.addEventListener('pointermove', div._pointerMoveHandler);
+    document.addEventListener('pointerup', () => {
+      document.removeEventListener('pointermove', div._pointerMoveHandler);
+      div._pointerDownAt = null;
+    }, { once: true });
   });
 
   // Right-click context menu
@@ -697,33 +1027,36 @@ async function buildGroupIconEl(group, tierId) {
 }
 // ── DROP HANDLING ─────────────────────────────────────────────────────────────
 function setupDropZone(el, tierId) {
-  el.addEventListener('dragover', e => {
-    if (drag.type === 'item' || drag.type === 'group') e.preventDefault();
-  });
-  el.addEventListener('drop', e => {
-    e.preventDefault();
-    if (drag.type === 'item') {
-      dropItems([...selectedIds], tierId, drag.insertBeforeId, drag.insertAfter, null);
-    } else if (drag.type === 'group') {
-      dropGroup(drag.id, tierId, drag.insertBeforeId, drag.insertAfter);
-    }
-  });
+  // Drop zones are now handled by global pointermove hit testing
+  el.dataset.tierId = tierId;
 }
 
 function dropItems(itemIds, toTierId, insertBeforeId, insertAfter, toGroupId) {
   if (!itemIds.length) { resetDrag(); return; }
 
-  // If dropping a single item onto itself, do nothing
   if (itemIds.length === 1 && itemIds[0] === insertBeforeId) {
     drag.id = null; resetDrag(); return;
+  }
+
+  const fromTierId = drag.fromTierId;
+  const fromGroupId = drag.fromGroupId;
+
+  // If pool order was temporarily sorted, commit it — user is now modifying it
+  if (poolSortBackup && (toTierId === null || fromTierId === null)) {
+    poolSortBackup = null;
+    const btn = document.getElementById('sortPoolBtn');
+    btn.textContent = 'A-Z';
+    btn.title = 'Sort pool A-Z';
   }
 
   const removed = itemIds.map(id => removeFromContainer(id)).filter(Boolean);
 
   let target;
+  let actualToGroupId = toGroupId;
   if (toGroupId) {
     const gRef = findGroupRef(toGroupId);
     target = gRef ? gRef.ref.items : getTargetContainer(toTierId);
+    if (!gRef) actualToGroupId = null;
   } else {
     target = getTargetContainer(toTierId);
   }
@@ -732,25 +1065,30 @@ function dropItems(itemIds, toTierId, insertBeforeId, insertAfter, toGroupId) {
 
   if (insertBeforeId) {
     let idx = target.findIndex(r => r.id === insertBeforeId);
-    if (idx === -1) {
-      target.push(...removed);
-    } else {
-      if (insertAfter) idx++;
-      target.splice(idx, 0, ...removed);
-    }
+    if (idx === -1) target.push(...removed);
+    else { if (insertAfter) idx++; target.splice(idx, 0, ...removed); }
   } else {
     target.push(...removed);
   }
 
-  // Keep selection so user can see what they moved
   saveState();
   drag.id = null;
   resetDrag();
-  render();
+
+  // Fast path: only rerender affected tiers instead of full render
+  const affectedTiers = new Set([fromTierId, toTierId]);
+  if (affectedTiers.size === 1 && !actualToGroupId) {
+    rerenderTierItems(fromTierId);
+  } else {
+    affectedTiers.forEach(id => rerenderTierItems(id));
+  }
 }
 
 function dropGroup(groupId, toTierId, insertBeforeId, insertAfter) {
   if (groupId === insertBeforeId) { drag.id = null; resetDrag(); return; }
+
+  const fromTierId = drag.fromTierId;
+
   const removed = removeFromContainer(groupId);
   if (!removed) { resetDrag(); return; }
   const target = getTargetContainer(toTierId);
@@ -763,7 +1101,11 @@ function dropGroup(groupId, toTierId, insertBeforeId, insertAfter) {
     target.push(removed);
   }
   drag.id = null;
-  saveState(); resetDrag(); render();
+  saveState();
+  resetDrag();
+
+  const affectedTiers = new Set([fromTierId, toTierId]);
+  affectedTiers.forEach(id => rerenderTierItems(id));
 }
 
 
@@ -998,10 +1340,11 @@ ctxMenu.addEventListener('click', async e => {
     });
     pickr.show();
   } else if (action === 'delete') {
+    const toDelete = ctxTargetType === 'group' ? null : [...selectedIds];
     const confirmed = await showConfirm(
       ctxTargetType === 'group'
         ? `Delete group and all ${findGroupRef(ctxTargetId)?.ref.items.length || 0} items?`
-        : `Delete ${selectedIds.size} item(s)?`
+        : `Delete ${toDelete.length} item(s)?`
     );
     if (!confirmed) return;
     if (ctxTargetType === 'group') {
@@ -1011,11 +1354,11 @@ ctxMenu.addEventListener('click', async e => {
         removeFromContainer(ctxTargetId);
       }
     } else {
-      for (const id of selectedIds) {
+      for (const id of toDelete) {
         await deleteImage(id);
         removeFromContainer(id);
+        selectedIds.delete(id);
       }
-      selectedIds.clear();
     }
     saveState(); render();
   }
@@ -1023,21 +1366,8 @@ ctxMenu.addEventListener('click', async e => {
 
 // ── TRASH ────────────────────────────────────────────────────────────────────
 const trashBtn = document.getElementById('trash-button');
-trashBtn.addEventListener('dragover', e => { e.preventDefault(); trashBtn.classList.add('drag-over'); });
-trashBtn.addEventListener('dragleave', () => trashBtn.classList.remove('drag-over'));
-trashBtn.addEventListener('drop', async e => {
-  e.preventDefault();
-  trashBtn.classList.remove('drag-over');
-  if (!selectedIds.size) return;
-  const confirmed = await showConfirm(`Delete ${selectedIds.size} item(s)?`);
-  if (!confirmed) return;
-  for (const id of selectedIds) {
-    await deleteImage(id);
-    removeFromContainer(id);
-  }
-  selectedIds.clear();
-  saveState(); render();
-});
+// Trash hover/drop is handled by pointer system via data-trash attribute
+trashBtn.dataset.trash = 'true';
 
 // ── EXPORT / IMPORT ──────────────────────────────────────────────────────────
 document.getElementById('export-btn').onclick = async () => {
@@ -1367,13 +1697,11 @@ document.getElementById('pinToggleBtn').onclick = () => {
 function applyPoolPin() {
   document.body.classList.toggle('pool-unpinned', !poolPinned);
   document.getElementById('pinToggleBtn').textContent = poolPinned ? '📌 Unpin' : '📌 Pin';
-  document.getElementById('trash-button').style.display = poolPinned ? '' : 'none';
 }
 
 document.getElementById('reset-btn').onclick = async () => {
   const confirmed = await showConfirm('Reset tierlist? All items and tiers will be removed.');
   if (!confirmed) return;
-  // Clear images from IndexedDB
   const db = await getDB();
   await new Promise(r => { const tx = db.transaction(IMG_STORE, 'readwrite'); tx.objectStore(IMG_STORE).clear(); tx.oncomplete = r; });
   imageCache.clear();
@@ -1383,7 +1711,46 @@ document.getElementById('reset-btn').onclick = async () => {
   ];
   pool = [];
   selectedIds.clear();
+  history = []; historyIndex = -1; updateUndoRedoBtns();
   saveState(); render();
+};
+
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('redoBtn').onclick = redo;
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); undo(); }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); }
+});
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+const searchInput = document.getElementById('searchInput');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim().toLowerCase();
+  document.querySelectorAll('.item').forEach(el => {
+    const name = (el.querySelector('img')?.alt || '').toLowerCase();
+    el.classList.toggle('search-dim', q.length > 0 && !name.includes(q));
+  });
+});
+
+// ── SORT POOL ─────────────────────────────────────────────────────────────────
+let poolSortBackup = null;
+document.getElementById('sortPoolBtn').onclick = () => {
+  const btn = document.getElementById('sortPoolBtn');
+  if (poolSortBackup) {
+    // Restore original order
+    pool.splice(0, pool.length, ...poolSortBackup);
+    poolSortBackup = null;
+    btn.textContent = 'A-Z (Off)';
+    btn.title = 'Sort pool A-Z';
+  } else {
+    // Sort, keeping backup of original
+    poolSortBackup = [...pool];
+    pool.sort((a, b) => (a.name || a.id).toLowerCase().localeCompare((b.name || b.id).toLowerCase()));
+    btn.textContent = 'A-Z (On)';
+    btn.title = 'Restore original order';
+  }
+  rerenderTierItems(null);
 };
 
 // ── DRAG-DROP FILES ───────────────────────────────────────────────────────────
@@ -1399,52 +1766,11 @@ document.addEventListener('dragleave', () => {
   dragFileCounter--;
   if (dragFileCounter <= 0) { dragFileCounter = 0; dropOverlay.classList.remove('visible'); }
 });
-// During drag, dragover preventDefault kills native wheel scroll — restore it manually
-document.addEventListener('wheel', e => {
-  if (!drag.type) return;
-  const poolEl = getPoolScrollEl();
-  // If mouse is over the pool, scroll pool; otherwise scroll window
-  if (poolEl && poolPinned) {
-    const rect = poolEl.getBoundingClientRect();
-    if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-      poolEl.scrollTop += e.deltaY;
-      return;
-    }
-  }
-  document.body.scrollTop += e.deltaY;
-}, { passive: true });
-
 document.addEventListener('dragover', e => {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-
-  // Save scroll position on every dragover — last one before drop has the correct pre-jump value
-
-  // Edge scroll: scroll whichever container the mouse is near the edge of
-  const zone = 60;
-  const speed = 12;
-  const y = e.clientY;
-  const h = window.innerHeight;
-
-  // Check pool first (fixed at bottom when pinned)
-  const poolEl = getPoolScrollEl();
-  if (poolEl && poolPinned) {
-    const rect = poolEl.getBoundingClientRect();
-    if (y >= rect.top && y <= rect.bottom) {
-      if (y < rect.top + zone) poolEl.scrollTop -= speed * (1 - (y - rect.top) / zone);
-      else if (y > rect.bottom - zone) poolEl.scrollTop += speed * (1 - (rect.bottom - y) / zone);
-      return;
-    }
-  }
-
-  // Otherwise scroll window (tiers area, or unpinned layout)
-  if (y < zone) {
-    document.body.scrollTop -= speed * (1 - y / zone);
-  } else if (y > h - zone) {
-    document.body.scrollTop += speed * (1 - (h - y) / zone);
-  }
+  if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
 });
 document.addEventListener('drop', e => {
+  if (!e.dataTransfer?.types.includes('Files')) return;
   e.preventDefault();
   dragFileCounter = 0;
   dropOverlay.classList.remove('visible');
