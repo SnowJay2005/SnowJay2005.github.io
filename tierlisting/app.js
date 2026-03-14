@@ -241,8 +241,10 @@ function startDrag(e, type, id, fromTierId, fromGroupId, el) {
   document.body.appendChild(dragGhost);
 
   document.body.style.userSelect = 'none';
+  document.body.style.touchAction = 'none'; // prevent scroll hijacking during drag
   document.addEventListener('pointermove', onPointerMove);
   document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointercancel', onPointerUp); // touch cancelled (e.g. incoming call)
   document.addEventListener('keydown', onDragKeyDown);
   startEdgeScroll();
 }
@@ -433,15 +435,20 @@ function hitTestItemOrGroup(x, y) {
 function onPointerUp(e) {
   document.removeEventListener('pointermove', onPointerMove);
   document.removeEventListener('pointerup', onPointerUp);
+  document.removeEventListener('pointercancel', onPointerUp);
   document.removeEventListener('keydown', onDragKeyDown);
   stopEdgeScroll();
   document.body.style.userSelect = '';
+  document.body.style.touchAction = '';
 
   if (dragGhost) { dragGhost.remove(); dragGhost = null; }
   document.querySelector('[data-trash]')?.classList.remove('drag-over');
   document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
 
   if (!drag.type) return;
+
+  // pointercancel = cancelled drag, just clean up without committing
+  if (e.type === 'pointercancel') { resetDrag(); return; }
 
   if (drag.type === 'tier') {
     commitTierDrop();
@@ -454,9 +461,11 @@ function onDragKeyDown(e) {
   if (e.key === 'Escape') {
     document.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('pointercancel', onPointerUp);
     document.removeEventListener('keydown', onDragKeyDown);
     stopEdgeScroll();
     document.body.style.userSelect = '';
+    document.body.style.touchAction = '';
     if (dragGhost) { dragGhost.remove(); dragGhost = null; }
     document.querySelector('[data-trash]')?.classList.remove('drag-over');
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
@@ -899,6 +908,8 @@ async function buildTierEl(tier) {
     });
     let colorTimeout = null;
     pickr.on('change', color => {
+      const btn = pickr.getRoot()?.button;
+      if (btn) btn.style.setProperty('--pcr-color', color.toHEXA().toString());
       clearTimeout(colorTimeout);
       colorTimeout = setTimeout(() => {
         tier.color = color.toHEXA().toString();
@@ -959,9 +970,33 @@ async function buildItemEl(ref, tierId, groupId) {
   div.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleSelect(ref.id, e); });
 
   div.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    // Don't start drag immediately — wait for pointermove threshold
-    // to distinguish click from drag
+    if (e.button !== 0 && e.pointerType !== 'touch') return;
+
+    // Multitouch: if a drag is already active, second finger adds to selection
+    if (drag.type === 'item' && e.pointerType === 'touch') {
+      selectedIds.add(ref.id);
+      lastSelectedId = ref.id;
+      document.querySelectorAll('.item').forEach(el =>
+        el.classList.toggle('selected', selectedIds.has(el.dataset.itemId)));
+      // Update ghost to show new count
+      if (dragGhost && selectedIds.size > 1) {
+        dragGhost.textContent = `×${selectedIds.size}`;
+        dragGhost.style.display = 'flex';
+        dragGhost.style.alignItems = 'center';
+        dragGhost.style.justifyContent = 'center';
+        dragGhost.style.fontSize = '1.2rem';
+        dragGhost.style.fontWeight = 'bold';
+        dragGhost.style.color = 'var(--accent)';
+        dragGhost.style.background = 'var(--item-bg)';
+        dragGhost.style.border = '1px solid var(--accent)';
+        dragGhost.innerHTML = '';
+        dragGhost.textContent = `×${selectedIds.size}`;
+      }
+      e.stopPropagation();
+      return;
+    }
+
+    // Normal drag start
     div._pointerDownAt = { x: e.clientX, y: e.clientY, e };
     div._pointerMoveHandler = (moveE) => {
       if (!div._pointerDownAt) return;
@@ -2564,6 +2599,22 @@ document.addEventListener('click', e => {
     }
   }
 });
+
+// ── HAMBURGER MENU ───────────────────────────────────────────────────────────
+const hamburgerMenu = document.getElementById('hamburger-menu');
+document.getElementById('hamburgerBtn').onclick = e => {
+  e.stopPropagation();
+  hamburgerMenu.classList.toggle('hidden');
+};
+document.addEventListener('pointerdown', e => {
+  if (!hamburgerMenu.classList.contains('hidden') && !hamburgerMenu.contains(e.target) && e.target.id !== 'hamburgerBtn') {
+    hamburgerMenu.classList.add('hidden');
+  }
+});
+// Proxy hamburger buttons to real handlers
+document.getElementById('hm-export-btn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('export-btn').onclick(); };
+document.getElementById('hm-import-btn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('import-btn').onclick(); };
+document.getElementById('hm-reset-btn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('reset-btn').onclick(); };
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 loadState();

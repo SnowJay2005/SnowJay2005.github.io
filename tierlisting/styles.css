@@ -123,6 +123,7 @@ html, body {
   cursor: grab;
   flex-shrink: 0;
   transition: color 0.15s;
+  touch-action: none;
 }
 .grab-handle:hover { color: var(--text); }
 .grab-handle:active { cursor: grabbing; }
@@ -220,6 +221,7 @@ html, body {
   flex-shrink: 0;
   user-select: none;
   background: var(--bg3);
+  touch-action: none;
 }
 
 .item img {
@@ -281,6 +283,7 @@ html, body {
   justify-content: center;
   gap: 3px;
   user-select: none;
+  touch-action: none;
   transition: background 0.1s;
 }
 .group-icon:hover {
@@ -913,4 +916,46 @@ body.pool-unpinned #app-body {
   flex-shrink: 0;
   font-size: 0.82rem;
   color: var(--text-dim);
+}
+
+/* ── MOBILE ── */
+.mobile-only { display: none; }
+
+@media (max-width: 600px) {
+  .desktop-only { display: none !important; }
+  .mobile-only { display: inline-flex !important; }
+
+  #app-header {
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .hdr-btn {
+    padding: 5px 8px;
+    font-size: 0.75rem;
+  }
+  #app-title {
+    font-size: 0.85rem;
+  }
+}
+
+#hamburger-menu {
+  position: fixed;
+  top: var(--header-h);
+  right: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 250;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+#hamburger-menu.hidden { display: none; }
+#hamburger-menu .hdr-btn {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
 }
