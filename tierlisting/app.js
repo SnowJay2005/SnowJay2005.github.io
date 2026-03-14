@@ -2612,6 +2612,9 @@ document.addEventListener('pointerdown', e => {
   }
 });
 // Proxy hamburger buttons to real handlers
+document.getElementById('hm-imageAdder').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('imageAdder').onclick(); };
+document.getElementById('hm-generatorBtn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('generatorBtn').onclick(); };
+document.getElementById('hm-exportImageBtn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('exportImageBtn').onclick(); };
 document.getElementById('hm-export-btn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('export-btn').onclick(); };
 document.getElementById('hm-import-btn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('import-btn').onclick(); };
 document.getElementById('hm-reset-btn').onclick = () => { hamburgerMenu.classList.add('hidden'); document.getElementById('reset-btn').onclick(); };

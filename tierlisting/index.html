@@ -18,9 +18,9 @@
   <div id="header-right">
     <button id="undoBtn" class="hdr-btn" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
     <button id="redoBtn" class="hdr-btn" title="Redo (Ctrl+Y)" disabled>↪ Redo</button>
-    <button id="imageAdder" class="hdr-btn" title="Add Images">+ Images</button>
-    <button id="generatorBtn" class="hdr-btn" title="Generate images from text">+ Text</button>
-    <button id="exportImageBtn" class="hdr-btn" title="Export as PNG">Export PNG</button>
+    <button id="imageAdder" class="hdr-btn desktop-only" title="Add Images">+ Images</button>
+    <button id="generatorBtn" class="hdr-btn desktop-only" title="Generate images from text">+ Text</button>
+    <button id="exportImageBtn" class="hdr-btn desktop-only" title="Export as PNG">Export PNG</button>
     <button id="export-btn" class="hdr-btn desktop-only" title="Export JSON">Export JSON</button>
     <button id="import-btn" class="hdr-btn desktop-only" title="Import JSON">Import JSON</button>
     <button id="reset-btn" class="hdr-btn danger desktop-only" title="Reset">Reset</button>
@@ -29,6 +29,9 @@
 </header>
 
 <div id="hamburger-menu" class="hidden">
+  <button id="hm-imageAdder" class="hdr-btn">+ Images</button>
+  <button id="hm-generatorBtn" class="hdr-btn">+ Text</button>
+  <button id="hm-exportImageBtn" class="hdr-btn">Export PNG</button>
   <button id="hm-export-btn" class="hdr-btn">Export JSON</button>
   <button id="hm-import-btn" class="hdr-btn">Import JSON</button>
   <button id="hm-reset-btn" class="hdr-btn danger">Reset</button>
