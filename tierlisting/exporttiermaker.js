@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Tiermaker Exporter
 // @namespace    https://snowjay2005.github.io/tierlisting/index.html
-// @version      0.6
-// @description  Adds an export button to Tiermaker to download tier data (including ranked items) as JSON with images converted to base64
+// @version      0.7
+// @description  Adds an export button to Tiermaker to download tier data as JSON compatible with the tierlisting site
 // @match        https://tiermaker.com/create/*
 // @grant        none
 // ==/UserScript==
@@ -10,206 +10,185 @@
 (function () {
   'use strict';
 
+  const MAX_SIZE = 200;    // max px on longest dimension (matches site compression)
+  const QUALITY  = 0.85;   // WebP quality (matches site)
+
+  // ── Wait for element ────────────────────────────────────────────────────────
   function waitForElement(selector, timeout = 10000) {
     return new Promise((resolve, reject) => {
-      const intervalTime = 100;
-      let elapsedTime = 0;
       const interval = setInterval(() => {
         const el = document.querySelector(selector);
-        if (el) {
-          clearInterval(interval);
-          resolve(el);
-        } else {
-          elapsedTime += intervalTime;
-          if (elapsedTime >= timeout) {
-            clearInterval(interval);
-            reject(new Error(`Timeout waiting for selector: ${selector}`));
-          }
-        }
-      }, intervalTime);
+        if (el) { clearInterval(interval); resolve(el); }
+      }, 100);
+      setTimeout(() => { clearInterval(interval); reject(new Error(`Timeout: ${selector}`)); }, timeout);
     });
   }
 
-  function injectButton(onClick) {
-    const btn = document.createElement('button');
-    btn.textContent = '📤 Export Tierlist JSON';
-    btn.style.position = 'fixed';
-    btn.style.top = '20px';
-    btn.style.right = '20px';
-    btn.style.zIndex = '9999';
-    btn.style.padding = '10px 14px';
-    btn.style.background = '#ff7f7f';
-    btn.style.color = 'white';
-    btn.style.border = 'none';
-    btn.style.borderRadius = '6px';
-    btn.style.fontSize = '14px';
-    btn.style.cursor = 'pointer';
-    btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+  // ── Button ───────────────────────────────────────────────────────────────────
+  let btn;
+  function injectButton() {
+    btn = document.createElement('button');
+    btn.textContent = '📤 Export Tierlist';
+    Object.assign(btn.style, {
+      position: 'fixed', top: '20px', right: '20px', zIndex: '9999',
+      padding: '10px 14px', background: '#ff7f7f', color: 'white',
+      border: 'none', borderRadius: '6px', fontSize: '14px',
+      cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+    });
     btn.addEventListener('click', () => {
       exportTierlist().catch(err => {
-        alert('Error exporting tierlist: ' + err.message);
+        btn.textContent = '❌ Export failed';
+        btn.style.background = '#e63946';
         console.error(err);
       });
     });
     document.body.appendChild(btn);
   }
 
+  function setProgress(text) {
+    btn.textContent = text;
+  }
+
+  // ── Image helpers ────────────────────────────────────────────────────────────
   function extractImageURL(div) {
-    const bg = div.style.backgroundImage;
-    const match = bg.match(/url\(["']?(.*?)["']?\)/);
+    const match = div.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/);
     if (!match) return null;
-    let src = match[1];
-    if (src.startsWith('/')) {
-      src = 'https://tiermaker.com' + src;
-    }
-    return src;
+    const src = match[1];
+    return src.startsWith('/') ? 'https://tiermaker.com' + src : src;
   }
 
   function extractNameFromSrc(src) {
-    const parts = src.split('/');
-    const filename = parts[parts.length - 1] || 'Unnamed';
-    const dotIndex = filename.lastIndexOf('.');
-    if (dotIndex > 0) {
-      return filename.substring(0, dotIndex);
-    }
-    return filename || 'Unnamed';
+    const filename = src.split('/').pop() || 'Unnamed';
+    const dot = filename.lastIndexOf('.');
+    return dot > 0 ? filename.substring(0, dot) : filename || 'Unnamed';
   }
 
-  async function urlToBase64(url) {
+  // Fetch URL, resize to max 200px longest side, export as WebP
+  async function processImage(src) {
+    // Fetch as blob first to handle CORS better
+    let imgSrc = src;
     try {
-      const res = await fetch(url);
+      const res = await fetch(src);
       const blob = await res.blob();
-      return await new Promise((resolve, reject) => {
+      imgSrc = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-    } catch (e) {
-      console.error('Failed to convert URL to base64:', url, e);
-      return url; // fallback to original url
+    } catch {
+      // If fetch fails, try loading directly (may hit CORS but worth trying)
     }
-  }
 
-  async function loadImageAndResize(src, size = 80) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous'; // to avoid tainted canvas if possible
+      img.crossOrigin = 'anonymous';
       img.onload = () => {
+        // Cap longest dimension at MAX_SIZE, never upscale
+        const scale = Math.min(MAX_SIZE / img.width, MAX_SIZE / img.height, 1);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
         const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-
-        // Clear transparent background
-        ctx.clearRect(0, 0, size, size);
-
-        // Calculate scale to fit image inside square without cropping
-        const scale = Math.min(size / img.width, size / img.height, 1);
-        const w = img.width * scale;
-        const h = img.height * scale;
-
-        // Center the image in the square canvas
-        const x = (size - w) / 2;
-        const y = (size - h) / 2;
-
-        ctx.drawImage(img, x, y, w, h);
-
-        // Export base64 webp
-        const dataUrl = canvas.toDataURL('image/webp', 0.75);
-        resolve(dataUrl);
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/webp', QUALITY));
       };
-      img.onerror = () => reject(new Error('Failed to load image: ' + src));
-      img.src = src;
+      img.onerror = () => reject(new Error('Failed to load: ' + src));
+      img.src = imgSrc;
     });
   }
 
-  async function convertImagesToBase64(tiers, pool) {
+  // ── Main export ──────────────────────────────────────────────────────────────
+  async function exportTierlist() {
+    btn.style.background = '#888';
+    btn.style.cursor = 'default';
+    btn.removeEventListener('click', exportTierlist);
+
+    // Count total images for progress
+    const allCharDivs = [...document.querySelectorAll('#tier-wrap #tier-container .tier-row .tier.sort div.character')];
+    const poolDivs    = [...document.querySelectorAll('#create-image-carousel div.character')];
+    const total = allCharDivs.length + poolDivs.length;
+    let done = 0;
+
+    const seenSrcs = new Set();
+
+    // ── Tiers ──
+    const tiers = [];
+    for (const row of document.querySelectorAll('#tier-wrap #tier-container .tier-row')) {
+      const labelHolder  = row.querySelector('.label-holder');
+      const tierItemsDiv = row.querySelector('.tier.sort');
+      if (!labelHolder || !tierItemsDiv) continue;
+
+      const nameSpan = labelHolder.querySelector('.label');
+      const name  = nameSpan ? nameSpan.textContent.trim() : 'Unnamed';
+      const color = labelHolder.style.backgroundColor || '#8888ff';
+
+      const items = [];
+      for (const div of tierItemsDiv.querySelectorAll('div.character')) {
+        const src = extractImageURL(div);
+        if (!src) continue;
+        seenSrcs.add(src);
+        const id   = crypto.randomUUID();
+        const itemName = extractNameFromSrc(src);
+        done++;
+        setProgress(`⏳ ${done}/${total}`);
+        const webp = await processImage(src);
+        items.push({ type: 'item', id, name: itemName, src: webp });
+      }
+
+      tiers.push({ id: crypto.randomUUID(), name, color, items });
+    }
+
+    // ── Pool ──
+    const pool = [];
+    const carousel = document.querySelector('#create-image-carousel');
+    if (carousel) {
+      for (const div of carousel.querySelectorAll('div.character')) {
+        const src = extractImageURL(div);
+        if (!src || seenSrcs.has(src)) continue;
+        const id   = crypto.randomUUID();
+        const name = extractNameFromSrc(src);
+        done++;
+        setProgress(`⏳ ${done}/${total}`);
+        const webp = await processImage(src);
+        pool.push({ type: 'item', id, name, src: webp });
+      }
+    }
+
+    // ── Build v2 format ──
+    // The site stores images separately from the state JSON.
+    // We embed them as a separate `images` map keyed by id so the importer can split them.
+    const images = {};
     for (const tier of tiers) {
       for (const item of tier.items) {
-        if (item.src && !item.src.startsWith('data:')) {
-          item.src = await urlToBase64(item.src);
-        }
+        images[item.id] = item.src;
+        delete item.src;
       }
     }
     for (const item of pool) {
-      if (item.src && !item.src.startsWith('data:')) {
-        item.src = await urlToBase64(item.src);
-      }
+      images[item.id] = item.src;
+      delete item.src;
     }
+
+    const output = {
+      _format: 'tierlistState_v2',
+      tiers,
+      pool,
+      images,  // id -> base64 WebP; importer should load these into IndexedDB
+    };
+
+    setProgress('✅ Done! Saving…');
+
+    const blob = new Blob([JSON.stringify(output)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'tiermaker_export.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+
+    btn.textContent = '✅ Exported!';
+    btn.style.background = '#4caf50';
   }
 
-  async function exportTierlist() {
-    try {
-      const tiers = [];
-      const allItems = new Map();
-
-      for (const row of document.querySelectorAll('#tier-wrap #tier-container .tier-row')) {
-        const labelHolder = row.querySelector('.label-holder');
-        const tierItemsDiv = row.querySelector('.tier.sort');
-        if (!labelHolder || !tierItemsDiv) continue;
-
-        const nameSpan = labelHolder.querySelector('.label');
-        const name = nameSpan ? nameSpan.textContent.trim() : 'Unnamed';
-        const color = labelHolder.style.backgroundColor || '#8888ff';
-
-        const items = [];
-        for (const div of tierItemsDiv.querySelectorAll('div.character')) {
-          const src = extractImageURL(div);
-          if (src) {
-            const id = crypto.randomUUID();
-            const itemName = extractNameFromSrc(src);
-            const resizedSrc = await loadImageAndResize(src, 80);
-            items.push({ id, src: resizedSrc, name: itemName });
-            allItems.set(src, id);
-          }
-        }
-
-        tiers.push({
-          id: crypto.randomUUID(),
-          name,
-          color,
-          items
-        });
-      }
-
-      const pool = [];
-      const carousel = document.querySelector('#create-image-carousel');
-      if (carousel) {
-        for (const div of carousel.querySelectorAll('div.character')) {
-          const src = extractImageURL(div);
-          if (src && !allItems.has(src)) {
-            const id = crypto.randomUUID();
-            const name = extractNameFromSrc(src);
-            const resizedSrc = await loadImageAndResize(src, 80);
-            pool.push({ id, src: resizedSrc, name });
-          }
-        }
-      }
-
-      // Convert any remaining URLs to base64 (fallback)
-      await convertImagesToBase64(tiers, pool);
-
-      const tierlistData = { tiers, pool };
-      console.log('Exported Tierlist:', tierlistData);
-
-      const dataStr = JSON.stringify(tierlistData, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'tiermaker_import.json';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      alert('Error exporting tierlist: ' + err.message);
-      console.error(err);
-    }
-  }
-
-  waitForElement('#tier-wrap').then(() => {
-    injectButton(exportTierlist);
-  });
+  waitForElement('#tier-wrap').then(injectButton);
 })();

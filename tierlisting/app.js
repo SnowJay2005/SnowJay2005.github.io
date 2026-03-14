@@ -63,7 +63,6 @@ let tiers = [];
 let pool = []; // [ ItemRef | GroupRef ]
 let selectedIds = new Set(); // item ids only
 let lastSelectedId = null;
-let fitMode = false;
 let poolPinned = true;
 
 const GROUP_COLORS = [
@@ -92,7 +91,6 @@ async function render() {
   const tiersEl = document.getElementById('tiers');
   const poolEl = document.getElementById('image-pool');
 
-  // Preserve scroll position across render
   const scrollY = document.body.scrollTop;
   const poolScrollY = getPoolScrollEl()?.scrollTop || 0;
 
@@ -112,15 +110,14 @@ async function render() {
   isRendering = false;
   if (renderPending) render();
 
-  // Restore scroll and fix textarea heights
   requestAnimationFrame(() => {
     document.body.scrollTop = scrollY;
     const pe = getPoolScrollEl();
     if (pe) pe.scrollTop = poolScrollY;
+    applySearch();
   });
 }
 
-// Re-render just one tier's items container (fast path for group toggle)
 async function rerenderTierItems(tierId) {
   const container = tierId === null
     ? document.getElementById('image-pool')
@@ -141,6 +138,7 @@ async function rerenderTierItems(tierId) {
     document.body.scrollTop = scrollY;
     const pe = getPoolScrollEl();
     if (pe) pe.scrollTop = poolScrollY;
+    applySearch();
   });
 }
 
@@ -312,10 +310,12 @@ function hitTestItemOrGroup(x, y) {
   const itemEl = el.closest('.item');
   if (itemEl) {
     const itemRect = itemEl.getBoundingClientRect();
-    // Strict hitbox: must be within item bounds (no gap between items)
     if (x >= itemRect.left && x <= itemRect.right && y >= itemRect.top && y <= itemRect.bottom) {
       const refId = itemEl.dataset.itemId;
       if (refId === drag.id) return; // self
+      // If this item is inside a group bracket, set _dropIntoGroupId
+      const parentBracket = itemEl.closest('.group-bracket');
+      drag._dropIntoGroupId = parentBracket?.dataset?.groupId || null;
       if (x < itemRect.left + itemRect.width / 2) {
         itemEl.classList.add('insert-before');
         drag.insertBeforeId = refId;
@@ -325,6 +325,7 @@ function hitTestItemOrGroup(x, y) {
         drag.insertBeforeId = refId;
         drag.insertAfter = true;
       }
+      if (drag._dropIntoGroupId) itemEl.closest('.group-bracket')?.classList.add('drop-target');
       return;
     }
   }
@@ -353,6 +354,38 @@ function hitTestItemOrGroup(x, y) {
   if (bracketEl && drag.type === 'item') {
     const bracketGroupId = bracketEl.dataset.groupId;
     if (bracketGroupId) {
+      // Find nearest item inside this bracket and use it for insert position
+      const bracketItems = [...bracketEl.querySelectorAll('.item')];
+      if (bracketItems.length) {
+        let best = null, bestDist = Infinity;
+        for (const c of bracketItems) {
+          const r = c.getBoundingClientRect();
+          const dx = Math.max(r.left - x, 0, x - r.right);
+          const dy = Math.max(r.top - y, 0, y - r.bottom);
+          const dist = Math.hypot(dx, dy);
+          if (dist < bestDist) { bestDist = dist; best = c; }
+        }
+        if (best) {
+          const refId = best.dataset.itemId;
+          if (refId && refId !== drag.id) {
+            const r = best.getBoundingClientRect();
+            clearInsertionMarkers();
+            if (x < r.left + r.width / 2) {
+              best.classList.add('insert-before');
+              drag.insertBeforeId = refId;
+              drag.insertAfter = false;
+            } else {
+              best.classList.add('insert-after');
+              drag.insertBeforeId = refId;
+              drag.insertAfter = true;
+            }
+            drag._dropIntoGroupId = bracketGroupId;
+            bracketEl.classList.add('drop-target');
+            return;
+          }
+        }
+      }
+      // Empty group or all items are self — just append
       bracketEl.classList.add('drop-target');
       drag.insertBeforeId = null;
       drag._dropIntoGroupId = bracketGroupId;
@@ -499,7 +532,7 @@ async function commitItemOrGroupDrop(e) {
   const dropIntoGroupId = drag._dropIntoGroupId;
   drag._dropIntoGroupId = null;
   if (dropIntoGroupId && drag.type === 'item') {
-    dropItems([...selectedIds], toTierId, null, false, dropIntoGroupId);
+    dropItems([...selectedIds], toTierId, drag.insertBeforeId, drag.insertAfter, dropIntoGroupId);
     return;
   }
 
@@ -604,7 +637,7 @@ function updateUndoRedoBtns() {
 function saveState() {
   pushHistory();
   try {
-    localStorage.setItem('tierlistState_v2', JSON.stringify({ tiers, pool, fitMode, poolPinned }));
+    localStorage.setItem('tierlistState_v2', JSON.stringify({ tiers, pool, poolPinned }));
   } catch(e) { console.warn('Save failed:', e); }
 }
 
@@ -617,9 +650,7 @@ async function loadState() {
       const d = JSON.parse(raw);
       tiers = d.tiers || [];
       pool = d.pool || [];
-      fitMode = d.fitMode || false;
       poolPinned = d.poolPinned !== false;
-      applyFitMode();
       applyPoolPin();
       await render();
       _skipHistory = false;
@@ -1136,8 +1167,10 @@ function clearInsertionMarkers() {
   document.querySelectorAll('.tier.drag-target-above,.tier.drag-target-below').forEach(el => {
     el.classList.remove('drag-target-above', 'drag-target-below');
   });
+  document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
   drag.insertBeforeId = null;
   drag.insertTierBeforeId = null;
+  drag._dropIntoGroupId = null;
 }
 
 // ── TOOLTIP ──────────────────────────────────────────────────────────────────
@@ -1159,19 +1192,72 @@ function hideTooltip() {
 }
 
 // ── IMAGES ───────────────────────────────────────────────────────────────────
-async function addImagesFromFiles(files) {
-  const promises = Array.from(files).map(file => new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const ref = makeItem(file.name.replace(/\.[^.]+$/, ''));
-      await saveImage(ref.id, ev.target.result);
-      imageCache.set(ref.id, ev.target.result);
-      pool.push(ref);
-      resolve();
+async function compressImage(dataUrl, maxSize = 200) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const needsResize = img.width > maxSize || img.height > maxSize;
+      let w = img.width, h = img.height;
+      if (needsResize) {
+        const scale = maxSize / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/webp', 0.85));
     };
-    reader.readAsDataURL(file);
-  }));
-  await Promise.all(promises);
+    img.onerror = () => resolve(dataUrl); // fallback to original on error
+    img.src = dataUrl;
+  });
+}
+
+// ── IMPORT PROGRESS ───────────────────────────────────────────────────────────
+let importProgressEl = null;
+function showImportProgress(current, total, label) {
+  if (!importProgressEl) {
+    importProgressEl = document.createElement('div');
+    importProgressEl.id = 'import-progress';
+    document.body.appendChild(importProgressEl);
+  }
+  const pct = total > 0 ? Math.round(current / total * 100) : 0;
+  importProgressEl.innerHTML = `
+    <div id="import-progress-bar" style="width:${pct}%"></div>
+    <div id="import-progress-label">${label} ${current}/${total}</div>
+  `;
+  importProgressEl.style.display = 'block';
+}
+function hideImportProgress() {
+  if (importProgressEl) importProgressEl.style.display = 'none';
+}
+
+async function addImagesFromFiles(files) {
+  const fileArr = Array.from(files);
+  const total = fileArr.length;
+  let done = 0;
+
+  showImportProgress(0, total, 'Importing…');
+
+  // Process sequentially to show accurate progress (and avoid memory spikes)
+  for (const file of fileArr) {
+    await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const compressed = await compressImage(ev.target.result);
+        const ref = makeItem(file.name.replace(/\.[^.]+$/, ''));
+        await saveImage(ref.id, compressed);
+        imageCache.set(ref.id, compressed);
+        pool.push(ref);
+        done++;
+        showImportProgress(done, total, 'Importing…');
+        resolve();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  hideImportProgress();
   saveState();
   render();
 }
@@ -1237,6 +1323,8 @@ let ctxTargetId = null;
 let ctxTargetType = null;
 
 function showCtxMenu(x, y) {
+  ctxMenu.querySelector('[data-action="inspect"]').style.display =
+    ctxTargetType === 'item' ? 'block' : 'none';
   ctxMenu.querySelector('[data-action="ungroup"]').style.display =
     ctxTargetType === 'group' ? 'block' : 'none';
   ctxMenu.querySelector('[data-action="group"]').style.display =
@@ -1281,7 +1369,10 @@ ctxMenu.addEventListener('click', async e => {
   ctxMenu.classList.add('hidden');
   const action = opt.dataset.action;
 
-  if (action === 'rename') {
+  if (action === 'inspect') {
+    if (ctxTargetType === 'item') showInspect(ctxTargetId);
+    return;
+  } else if (action === 'rename') {
     if (ctxTargetType === 'group') {
       const gRef = findGroupRef(ctxTargetId);
       if (!gRef) return;
@@ -1406,13 +1497,17 @@ document.getElementById('import-json').addEventListener('change', async e => {
     try {
       const d = JSON.parse(ev.target.result);
 
-      // Support both v1 (old format with src on items) and v2
-      const isV2 = d.version === 2;
+      const imgMap = d.images || {};
+      const totalItems = Object.keys(imgMap).length || 1;
+      let importedItems = 0;
 
       async function importRef(ref) {
         if (ref.type === 'item' || !ref.type) {
           const r = { type: 'item', id: ref.id || crypto.randomUUID(), name: ref.name || '' };
-          if (ref.src) { await saveImage(r.id, ref.src); imageCache.set(r.id, ref.src); }
+          const src = ref.src || imgMap[r.id];
+          if (src) { await saveImage(r.id, src); imageCache.set(r.id, src); }
+          importedItems++;
+          showImportProgress(importedItems, totalItems, 'Importing…');
           return r;
         }
         if (ref.type === 'group') {
@@ -1442,113 +1537,472 @@ document.getElementById('import-json').addEventListener('change', async e => {
         if (imported) pool.push(imported);
       }
 
+      hideImportProgress();
       saveState(); render();
     } catch(err) {
+      hideImportProgress();
       alert('Failed to import: ' + err.message);
     }
   };
   reader.readAsText(file);
 });
 
-// ── IMAGE EXPORT ─────────────────────────────────────────────────────────────
+// ── IMAGE EXPORT ──────────────────────────────────────────────────────────────
+// CSS design tokens (must match styles.css)
+const EX = {
+  bg:       '#111318',
+  bg2:      '#1a1d24',
+  bg3:      '#22262f',
+  border:   '#2e3340',
+  text:     '#e4e8f0',
+  textDim:  '#6b7280',
+  radius:    6,
+  tierGap:   2,
+  labelW:   90,       // .tier-label width
+  itemGap:   3,       // gap between items
+  itemPad:   4,       // .tier-items-container padding
+};
+
 document.getElementById('exportImageBtn').onclick = () => {
   document.getElementById('export-modal').classList.remove('hidden');
-  generatePreview();
+  document.getElementById('exportPreviewImg').style.display = 'none';
+  document.getElementById('export-preview-hint').style.display = '';
+  document.getElementById('export-preview-hint').textContent = 'Press Preview to generate';
 };
 
-document.getElementById('download-png').onclick = () => {
-  exportImage();
-};
+document.getElementById('export-preview-btn').onclick = () => doExport(false);
+document.getElementById('download-png').onclick = () => doExport(true);
+document.getElementById('export-autofit-square').onclick = () => autoFitExport(1);
+document.getElementById('export-autofit-169').onclick = () => autoFitExport(16/9);
+document.getElementById('export-autofit-wide').onclick = () => autoFitExport(null);
 
-function prepareForExport() {
-  // Expand all groups temporarily
-  const collapsed = [];
-  for (const t of tiers) {
-    for (const r of t.items) {
-      if (r.type === 'group' && r.collapsed) {
-        r.collapsed = false;
-        collapsed.push(r);
-      }
+function getExportSettings() {
+  const itemSizePx = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--item-size')) || 80;
+  return {
+    format:      document.getElementById('exportFormat').value,
+    scale:       parseFloat(document.getElementById('exportScale').value) || 1,
+    itemsPerRow: Math.max(1, parseInt(document.getElementById('exportItemsPerRow').value) || 20),
+    itemSize:    itemSizePx,
+    showLabels:  document.getElementById('exportShowLabels').checked,
+  };
+}
+
+// Build flat cell list for a tier: items and group-icons in order
+function buildExportCells(tier) {
+  const cells = [];
+  for (const ref of tier.items) {
+    if (ref.type === 'item') {
+      cells.push({ kind: 'item', ref, groupRef: null });
+    } else if (ref.type === 'group') {
+      // Group renders as: [icon cell] [item cells...] all wrapped together
+      cells.push({ kind: 'group', ref, cells: ref.items.map(item => ({ kind: 'item', ref: item, groupRef: ref })) });
     }
   }
-  return collapsed;
+  return cells;
 }
 
-function restoreAfterExport(collapsed) {
-  for (const g of collapsed) g.collapsed = true;
-}
+// Calculate total canvas height for a tier given item size and items-per-row
+// Groups are inline-flex wrapped, so we need to lay them out
+function layoutTier(tierCells, itemSize, itemsPerRow, showLabels, imgMapRef) {
+  const labelH = showLabels ? Math.max(12, Math.round(itemSize * 0.16)) : 0;
+  const gap = EX.itemGap;
+  const pad = EX.itemPad;
 
-async function generatePreview() {
-  const node = document.getElementById('tiers');
-  const collapsed = prepareForExport();
-  await render();
-
-  const handles = node.querySelectorAll('.grab-handle, .tier-actions');
-  handles.forEach(el => el.style.display = 'none');
-
-  try {
-    const url = await domtoimage.toPng(node, {
-      filter: n => !n.classList?.contains('grab-handle') && !n.classList?.contains('tier-actions')
-    });
-    document.getElementById('exportPreviewImage').src = url;
-  } catch(e) { console.error(e); }
-
-  handles.forEach(el => el.style.display = '');
-  restoreAfterExport(collapsed);
-  await render();
-}
-
-async function exportImage() {
-  const node = document.getElementById('tiers');
-  const scale = parseFloat(document.getElementById('exportScale').value) || 2;
-  const transparent = document.getElementById('exportTransparent').checked;
-  document.getElementById('export-modal').classList.add('hidden');
-
-  const collapsed = prepareForExport();
-  await render();
-
-  const handles = node.querySelectorAll('.grab-handle, .tier-actions');
-  handles.forEach(el => el.style.display = 'none');
-
-  const rect = node.getBoundingClientRect();
-  const opts = {
-    width: rect.width * scale,
-    height: rect.height * scale,
-    style: { transform: `scale(${scale})`, transformOrigin: 'top left' },
-    filter: n => !n.classList?.contains('grab-handle') && !n.classList?.contains('tier-actions')
-  };
-
-  if (transparent) {
-    // Walk the node and remove backgrounds temporarily
-    const saved = [];
-    [node, ...node.querySelectorAll('*')].forEach(el => {
-      if (el.classList?.contains('tier-label')) return;
-      saved.push([el, el.style.background, el.style.backgroundColor]);
-      el.style.background = 'transparent';
-      el.style.backgroundColor = 'transparent';
-    });
-
-    try {
-      const url = await domtoimage.toPng(node, opts);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'tierlist.png'; a.click();
-    } catch(e) { console.error(e); }
-
-    saved.forEach(([el, bg, bgc]) => { el.style.background = bg; el.style.backgroundColor = bgc; });
-  } else {
-    try {
-      const url = await domtoimage.toPng(node, opts);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'tierlist.png'; a.click();
-    } catch(e) { console.error(e); }
+  function cellDims(ref) {
+    return { w: itemSize, h: itemSize + labelH };
   }
 
-  handles.forEach(el => el.style.display = '');
-  restoreAfterExport(collapsed);
-  await render();
+  const chunks = [];
+  for (const cell of tierCells) {
+    if (cell.kind === 'item') {
+      const { w, h } = cellDims(cell.ref);
+      chunks.push({ type: 'item', ref: cell.ref, w, h });
+    } else if (cell.kind === 'group') {
+      const bp = 3, bg = 3;
+      const groupItems = [{ isIcon: true }, ...cell.ref.items.map(r => ({ isIcon: false, ref: r }))];
+      let rowW = 0, rows = 1, maxItemH = itemSize + labelH;
+      for (const gi of groupItems) {
+        const gw = gi.isIcon ? itemSize : cellDims(gi.ref).w;
+        const gh = gi.isIcon ? itemSize : cellDims(gi.ref).h;
+        maxItemH = Math.max(maxItemH, gh);
+        rowW += (rowW > 0 ? bg : 0) + gw;
+      }
+      const groupH = rows * maxItemH + (rows - 1) * bg + bp * 2;
+      const groupW = rowW + bp * 2;
+      chunks.push({ type: 'group', ref: cell.ref, w: groupW, h: groupH + 4 });
+    }
+  }
+
+  // In fit mode, items-per-row controls count not width, so just split into rows of itemsPerRow
+  const rows = [];
+  for (let i = 0; i < chunks.length; i += itemsPerRow) {
+    rows.push(chunks.slice(i, i + itemsPerRow));
+  }
+  if (!rows.length) rows.push([]);
+
+  // Track actual max row width for canvas sizing
+  const maxRowW = rows.reduce((max, row) => {
+    const w = row.reduce((s, c, i) => s + c.w + (i > 0 ? gap : 0), 0);
+    return Math.max(max, w);
+  }, 0);
+
+  const totalH = pad + rows.reduce((sum, row) => sum + (row.length ? Math.max(...row.map(c => c.h)) : 0) + gap, 0) + pad - gap;
+  return { rows, totalH: Math.max(totalH, itemSize + pad * 2), maxRowW };
 }
 
-// ── MODALS ────────────────────────────────────────────────────────────────────
+function estimateExportSize(itemsPerRow, itemSize, scale, showLabels) {
+  const totalW = EX.labelW + itemsPerRow * itemSize + (itemsPerRow - 1) * EX.itemGap + EX.itemPad * 2;
+  const totalH = tiers.reduce((sum, tier) => {
+    const cells = buildExportCells(tier);
+    const { totalH } = layoutTier(cells, itemSize, itemsPerRow, showLabels);
+    return sum + totalH + EX.tierGap;
+  }, 0);
+  return { w: totalW * scale, h: totalH * scale };
+}
+
+function autoFitExport(targetRatio) {
+  const s = getExportSettings();
+  const CANVAS_MAX = 8192;
+  const MIN_IPR = 10;
+
+  // Only adjust items-per-row, keep item size as-is unless it causes overflow
+  let maxIPR = MIN_IPR;
+  for (let ipr = 200; ipr >= MIN_IPR; ipr--) {
+    if (estimateExportSize(ipr, s.itemSize, s.scale, s.showLabels).w <= CANVAS_MAX) { maxIPR = ipr; break; }
+  }
+
+  let bestIPR = maxIPR;
+  if (targetRatio !== null) {
+    let bestDiff = Infinity;
+    for (let ipr = MIN_IPR; ipr <= maxIPR; ipr++) {
+      const { w, h } = estimateExportSize(ipr, s.itemSize, s.scale, s.showLabels);
+      const diff = Math.abs(w / h - targetRatio);
+      if (diff < bestDiff) { bestDiff = diff; bestIPR = ipr; }
+    }
+  }
+
+  const { w: fw, h: fh } = estimateExportSize(bestIPR, s.itemSize, s.scale, s.showLabels);
+  const tooBig = fw > CANVAS_MAX || fh > CANVAS_MAX;
+  const label = targetRatio === null ? 'wide' : targetRatio === 1 ? '1:1' : '16:9';
+  document.getElementById('exportItemsPerRow').value = bestIPR;
+  document.getElementById('export-preview-hint').textContent = tooBig
+    ? `Auto-fit (${label}): ${bestIPR} per row — canvas too large at ${s.scale}×, try a lower scale.`
+    : `Auto-fit (${label}): ${bestIPR} per row — ~${Math.round(fw)}×${Math.round(fh)}px at ${s.scale}×. Press Preview.`;
+  document.getElementById('export-preview-hint').style.display = '';
+  document.getElementById('exportPreviewImg').style.display = 'none';
+}
+
+async function doExport(download) {
+  const hint = document.getElementById('export-preview-hint');
+  const previewImg = document.getElementById('exportPreviewImg');
+  const previewBtn = document.getElementById('export-preview-btn');
+  const downloadBtn = document.getElementById('download-png');
+
+  hint.textContent = '⏳ Loading images…';
+  hint.style.display = '';
+  previewImg.style.display = 'none';
+  previewBtn.disabled = true;
+  downloadBtn.disabled = true;
+
+  try {
+    await _doExportCanvas(download);
+  } catch(err) {
+    console.error('Export failed:', err);
+    hint.textContent = `❌ Export failed: ${err.message || String(err)}`;
+    hint.style.display = '';
+    previewImg.style.display = 'none';
+  } finally {
+    previewBtn.disabled = false;
+    downloadBtn.disabled = false;
+  }
+}
+
+async function _doExportCanvas(download) {
+  const hint = document.getElementById('export-preview-hint');
+  const s = getExportSettings();
+  const px = s.scale;
+  const itemSz = s.itemSize;
+  const labelH = s.showLabels ? Math.max(12, Math.round(itemSz * 0.16)) : 0;
+  const labelFontSz = Math.max(9, Math.round(itemSz * 0.13));
+  const cellH = itemSz + labelH;
+  const CANVAS_MAX = 8192;
+
+  // Load all images
+  const allIds = new Set();
+  function collectIds(ref) {
+    if (ref.type === 'item') allIds.add(ref.id);
+    else if (ref.type === 'group') ref.items.forEach(i => allIds.add(i.id));
+  }
+  for (const tier of tiers) tier.items.forEach(collectIds);
+
+  const imgMap = {};
+  let loaded = 0, total = allIds.size;
+  await Promise.all([...allIds].map(async id => {
+    const src = await getCachedImage(id);
+    if (!src) { loaded++; return; }
+    await new Promise(res => {
+      const img = new Image();
+      img.onload = () => { imgMap[id] = img; loaded++; hint.textContent = `⏳ Loading… ${loaded}/${total}`; res(); };
+      img.onerror = () => { loaded++; res(); };
+      img.src = src;
+    });
+  }));
+
+  hint.textContent = '⏳ Rendering…';
+
+  // Build layout for all tiers
+  const tierLayouts = tiers.map(tier => {
+    const cells = buildExportCells(tier);
+    const layout = layoutTier(cells, itemSz, s.itemsPerRow, s.showLabels, imgMap);
+    return { tier, cells, ...layout };
+  });
+
+  const totalW = EX.labelW + s.itemsPerRow * itemSz + (s.itemsPerRow - 1) * EX.itemGap + EX.itemPad * 2;
+  const totalH = tierLayouts.reduce((sum, l) => sum + l.totalH + EX.tierGap, 0);
+  const canvasW = totalW * px, canvasH = totalH * px;
+
+  if (canvasW > CANVAS_MAX || canvasH > CANVAS_MAX) {
+    throw new Error(`Canvas too large (${Math.round(canvasW)}×${Math.round(canvasH)}px). Reduce scale, item size, or increase items per row.`);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasW; canvas.height = canvasH;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(px, px);
+
+  // Helper: draw image cover-cropped into a rect
+  // Compute actual drawn size for an item in fit mode
+  function getItemDims(ref) {
+    // Always itemSz x itemSz cell — in fit mode use contain rendering inside it
+    return { w: itemSz, h: itemSz };
+  }
+
+  function drawImage(img, x, y, w, h) {
+    const srcAr = img.width / img.height;
+    const dstAr = w / h;
+    let sx = 0, sy = 0, sw = img.width, sh = img.height;
+    if (srcAr > dstAr) { sw = img.height * dstAr; sx = (img.width - sw) / 2; }
+    else { sh = img.width / dstAr; sy = (img.height - sh) / 2; }
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  // Helper: draw rounded rect
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  // Helper: draw folder SVG path (matches the SVG in buildGroupIconEl)
+  function drawFolderIcon(x, y, size, color) {
+    // SVG path: M3 7 a2 2 0 012-2 h4 l2 2 h8 a2 2 0 012 2 v8 a2 2 0 01-2 2 H5 a2 2 0 01-2-2 V7z
+    // Scaled from 24x24 viewBox to `size`
+    const sc = size / 24;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(sc, sc);
+    ctx.fillStyle = 'none';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5 / sc;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(3, 7); ctx.arcTo(3, 5, 5, 5, 2);
+    ctx.lineTo(9, 5); ctx.lineTo(11, 7);
+    ctx.lineTo(19, 7); ctx.arcTo(21, 7, 21, 9, 2);
+    ctx.lineTo(21, 17); ctx.arcTo(21, 19, 19, 19, 2);
+    ctx.lineTo(5, 19); ctx.arcTo(3, 19, 3, 17, 2);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Helper: draw item (image + optional label)
+  function drawItem(ref, x, y) {
+    const img = imgMap[ref.id];
+    const { w, h } = getItemDims(ref);
+    roundRect(x, y, w, h, 3);
+    ctx.fillStyle = EX.bg3;
+    ctx.fill();
+    if (img) {
+      ctx.save();
+      roundRect(x, y, w, h, 3);
+      ctx.clip();
+      const scale = Math.min(w / img.width, h / img.height);
+      const dw = img.width * scale, dh = img.height * scale;
+      ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      ctx.restore();
+    }
+    if (s.showLabels && ref.name) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = `${labelFontSz}px "DM Sans", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ref.name, x + w / 2, y + h + labelH / 2, w - 2);
+    }
+  }
+
+  // Helper: draw group icon cell
+  function drawGroupIcon(group, x, y) {
+    const color = group.color || EX.textDim;
+    // Background
+    roundRect(x, y, itemSz, itemSz, 3);
+    ctx.fillStyle = EX.bg2;
+    ctx.fill();
+    // Border
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    roundRect(x, y, itemSz, itemSz, 3);
+    ctx.stroke();
+    // Folder icon centered (32x32 like .group-icon-symbol)
+    const iconSz = Math.round(itemSz * 0.4);
+    drawFolderIcon(x + (itemSz - iconSz) / 2, y + itemSz * 0.12, iconSz, color);
+    // Name
+    ctx.fillStyle = EX.text;
+    ctx.font = `700 9px "Space Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    let name = group.name || '';
+    while (ctx.measureText(name).width > itemSz - 8 && name.length > 1) name = name.slice(0, -1);
+    if (name !== (group.name || '')) name += '…';
+    ctx.fillText(name, x + itemSz / 2, y + itemSz * 0.62);
+    // Count (top-right, matching .group-icon-count)
+    ctx.fillStyle = color;
+    ctx.font = `700 9px "Space Mono", monospace`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(String(group.items.length), x + itemSz - 4, y + 3);
+  }
+
+  // Draw everything
+  let tierY = 0;
+  for (const { tier, cells, rows, totalH: tierH } of tierLayouts) {
+    // Tier background + border
+    roundRect(0, tierY, totalW, tierH, EX.radius);
+    ctx.fillStyle = EX.bg2;
+    ctx.fill();
+    ctx.strokeStyle = EX.border;
+    ctx.lineWidth = 1;
+    roundRect(0, tierY, totalW, tierH, EX.radius);
+    ctx.stroke();
+
+    // Tier label
+    roundRect(0, tierY, EX.labelW, tierH, EX.radius);
+    ctx.fillStyle = tier.color;
+    ctx.fill();
+
+    // Tier label text (Space Mono bold, centered, rgba(0,0,0,0.75))
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const labelFontSz = Math.max(10, Math.min(16, Math.round(EX.labelW * 0.16)));
+    ctx.font = `700 ${labelFontSz}px "Space Mono", monospace`;
+    // Word wrap label
+    const labelWords = tier.name.split(' ');
+    const labelLines = [];
+    let line = '';
+    for (const w of labelWords) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > EX.labelW - 10 && line) { labelLines.push(line); line = w; }
+      else line = test;
+    }
+    if (line) labelLines.push(line);
+    const lh = labelFontSz * 1.3;
+    const textBlock = labelLines.length * lh;
+    labelLines.forEach((ln, i) => {
+      ctx.fillText(ln, EX.labelW / 2, tierY + tierH / 2 - textBlock / 2 + i * lh + lh / 2);
+    });
+
+    // Items area border-left
+    ctx.strokeStyle = EX.border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(EX.labelW, tierY);
+    ctx.lineTo(EX.labelW, tierY + tierH);
+    ctx.stroke();
+
+    // Draw items/groups row by row
+    let rowY = tierY + EX.itemPad;
+    for (const row of rows) {
+      if (!row.length) continue;
+      let rowH = Math.max(...row.map(c => c.h));
+      let chunkX = EX.labelW + EX.itemPad;
+
+      for (const chunk of row) {
+        if (chunk.type === 'item') {
+          drawItem(chunk.ref, chunkX, rowY);
+        } else if (chunk.type === 'group') {
+          const group = chunk.ref;
+          const color = group.color || EX.textDim;
+          const bp = 3, bg = 3;
+
+          // Group bracket background
+          roundRect(chunkX, rowY, chunk.w, chunk.h, EX.radius);
+          // 8% tint of group color
+          ctx.fillStyle = color + '14';
+          ctx.fill();
+          // Border
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          roundRect(chunkX, rowY, chunk.w, chunk.h, EX.radius);
+          ctx.stroke();
+
+          // Draw icon + items inside bracket
+          const groupCells = [{ isIcon: true }, ...group.items.map(r => ({ isIcon: false, ref: r }))];
+          let gx = chunkX + bp, gy = rowY + bp;
+          let rowItemH = itemSz;
+          let gcol = 0;
+          const maxCols = Math.floor((chunk.w - bp * 2 + bg) / (itemSz + bg));
+          for (const gc of groupCells) {
+            const gdims = gc.isIcon ? { w: itemSz, h: itemSz } : getItemDims(gc.ref);
+            if (gcol > 0 && gcol >= maxCols) {
+              gcol = 0; gx = chunkX + bp; gy += rowItemH + labelH + bg; rowItemH = itemSz;
+            }
+            rowItemH = Math.max(rowItemH, gdims.h);
+            if (gc.isIcon) {
+              drawGroupIcon(group, gx, gy);
+            } else {
+              drawItem(gc.ref, gx, gy);
+            }
+            gx += gdims.w + bg;
+            gcol++;
+          }
+        }
+        chunkX += chunk.w + EX.itemGap;
+      }
+      rowY += rowH + EX.itemGap;
+    }
+
+    tierY += tierH + EX.tierGap;
+  }
+
+  // Output
+  const format = s.format;
+  const ext = format === 'image/webp' ? 'webp' : 'png';
+  const quality = format === 'image/webp' ? 0.92 : undefined;
+
+  if (download) {
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `tierlist.${ext}`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, format, quality);
+    document.getElementById('export-modal').classList.add('hidden');
+  } else {
+    // Preview always WebP for speed
+    const previewImg = document.getElementById('exportPreviewImg');
+    previewImg.src = canvas.toDataURL('image/webp', 0.85);
+    previewImg.style.display = 'block';
+    document.getElementById('export-preview-hint').style.display = 'none';
+  }
+}
+
 function showConfirm(message) {
   return new Promise(resolve => {
     const overlay = createOverlay();
@@ -1677,17 +2131,6 @@ document.getElementById('imageLoader').addEventListener('change', e => {
   e.target.value = '';
 });
 
-document.getElementById('fitToggle').addEventListener('change', e => {
-  fitMode = e.target.checked;
-  applyFitMode();
-  saveState();
-});
-
-function applyFitMode() {
-  document.body.classList.toggle('fit-mode', fitMode);
-  document.getElementById('fitToggle').checked = fitMode;
-}
-
 document.getElementById('pinToggleBtn').onclick = () => {
   poolPinned = !poolPinned;
   applyPoolPin();
@@ -1725,33 +2168,367 @@ document.addEventListener('keydown', e => {
 
 // ── SEARCH ────────────────────────────────────────────────────────────────────
 const searchInput = document.getElementById('searchInput');
-searchInput.addEventListener('input', () => {
+
+function applySearch() {
   const q = searchInput.value.trim().toLowerCase();
   document.querySelectorAll('.item').forEach(el => {
     const name = (el.querySelector('img')?.alt || '').toLowerCase();
     el.classList.toggle('search-dim', q.length > 0 && !name.includes(q));
   });
-});
+}
+
+searchInput.addEventListener('input', applySearch);
 
 // ── SORT POOL ─────────────────────────────────────────────────────────────────
 let poolSortBackup = null;
 document.getElementById('sortPoolBtn').onclick = () => {
   const btn = document.getElementById('sortPoolBtn');
   if (poolSortBackup) {
-    // Restore original order
     pool.splice(0, pool.length, ...poolSortBackup);
     poolSortBackup = null;
-    btn.textContent = 'A-Z (Off)';
+    btn.classList.remove('sort-active');
     btn.title = 'Sort pool A-Z';
   } else {
-    // Sort, keeping backup of original
     poolSortBackup = [...pool];
     pool.sort((a, b) => (a.name || a.id).toLowerCase().localeCompare((b.name || b.id).toLowerCase()));
-    btn.textContent = 'A-Z (On)';
+    btn.classList.add('sort-active');
     btn.title = 'Restore original order';
   }
   rerenderTierItems(null);
 };
+
+// ── IMAGE GENERATOR ───────────────────────────────────────────────────────────
+let genBgImageData = null;
+let genBgColor = '#1a1d24';
+let genTextColor = '#ffffff';
+let genStrokeColor = '#000000';
+
+function makeGenPickr(el, defaultColor, onChange) {
+  const p = Pickr.create({
+    el, theme: 'nano', default: defaultColor,
+    swatches: ['#ffffff','#000000','#1a1d24','#ff7f7f','#ffbf7f','#ffff7f','#7fff7f','#7fbfff','#ff7fff'],
+    components: { preview: true, opacity: false, hue: true,
+      interaction: { hex: true, input: true, save: false, clear: false } }
+  });
+  let t = null;
+  p.on('change', color => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const hex = color.toHEXA().toString();
+      onChange(hex);
+      updateGenPreview();
+    }, 50);
+  });
+  // Update button swatch on save (user confirms) or change
+  p.on('change', color => {
+    const btn = p.getRoot()?.button;
+    if (btn) btn.style.setProperty('--pcr-color', color.toHEXA().toString());
+  });
+  return p;
+}
+
+// Init Pickr instances after modal is first opened (so elements are visible)
+let genPickrsInited = false;
+function initGenPickrs() {
+  if (genPickrsInited) return;
+  genPickrsInited = true;
+  makeGenPickr(document.getElementById('genBgColorPickr'), genBgColor, c => {
+    genBgColor = c;
+    genBgImageData = null;
+    document.getElementById('genDimRow').style.display = 'none';
+    document.getElementById('genBgImageName').textContent = '';
+  });
+  makeGenPickr(document.getElementById('genTextColorPickr'), genTextColor, c => { genTextColor = c; });
+  makeGenPickr(document.getElementById('genStrokeColorPickr'), genStrokeColor, c => { genStrokeColor = c; });
+}
+
+document.getElementById('generatorBtn').onclick = () => {
+  document.getElementById('generator-modal').classList.remove('hidden');
+  requestAnimationFrame(() => initGenPickrs());
+};
+
+document.getElementById('genBgImageBtn').onclick = () => {
+  document.getElementById('genBgImageLoader').click();
+};
+
+document.getElementById('genBgImageLoader').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    genBgImageData = ev.target.result;
+    document.getElementById('genDimRow').style.display = '';
+    document.getElementById('genBgImageName').textContent = file.name;
+    updateGenPreview();
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('genDimAmount').addEventListener('input', e => {
+  document.getElementById('genDimVal').textContent = e.target.value + '%';
+  updateGenPreview();
+});
+document.getElementById('genStrokeWidth').addEventListener('input', e => {
+  document.getElementById('genStrokeVal').textContent = e.target.value + 'px';
+  updateGenPreview();
+});
+document.getElementById('generatorLines').addEventListener('input', () => updateGenPreview());
+
+function renderGeneratorTile(canvas, text) {
+  const SIZE = 200;
+  canvas.width = SIZE; canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  const dimAmount   = parseInt(document.getElementById('genDimAmount').value) / 100;
+  const strokeWidth = parseInt(document.getElementById('genStrokeWidth').value);
+
+  ctx.fillStyle = genBgColor;
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  if (genBgImageData) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.max(SIZE / img.width, SIZE / img.height);
+        const dw = img.width * scale, dh = img.height * scale;
+        ctx.drawImage(img, (SIZE - dw) / 2, (SIZE - dh) / 2, dw, dh);
+        if (dimAmount > 0) {
+          ctx.fillStyle = `rgba(0,0,0,${dimAmount})`;
+          ctx.fillRect(0, 0, SIZE, SIZE);
+        }
+        drawGenText(ctx, text, SIZE, strokeWidth);
+        resolve();
+      };
+      img.src = genBgImageData;
+    });
+  } else {
+    drawGenText(ctx, text, SIZE, strokeWidth);
+    return Promise.resolve();
+  }
+}
+
+function drawGenText(ctx, text, SIZE, strokeWidth) {
+  if (!text) return;
+  const PAD = 12;
+  const maxW = SIZE - PAD * 2;
+
+  let fontSize = 32;
+  let lines;
+  while (fontSize >= 10) {
+    ctx.font = `bold ${fontSize}px "DM Sans", sans-serif`;
+    lines = wrapTextGen(ctx, text, maxW);
+    if (lines.length * fontSize * 1.25 <= SIZE - PAD * 2) break;
+    fontSize -= 2;
+  }
+
+  ctx.font = `bold ${fontSize}px "DM Sans", sans-serif`;
+  const lineH = fontSize * 1.25;
+  const totalH = lines.length * lineH;
+  const startY = (SIZE - totalH) / 2 + fontSize * 0.8;
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  lines.forEach((line, i) => {
+    const y = startY + i * lineH;
+    if (strokeWidth > 0) {
+      ctx.lineWidth = strokeWidth * 2;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = genStrokeColor;
+      ctx.strokeText(line, SIZE / 2, y);
+    }
+    ctx.fillStyle = genTextColor;
+    ctx.fillText(line, SIZE / 2, y);
+  });
+}
+
+function wrapTextGen(ctx, text, maxW) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = word; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [text];
+}
+
+async function updateGenPreview() {
+  const lines = document.getElementById('generatorLines').value.trim().split('\n').filter(l => l.trim());
+  const previewText = lines[0] || 'Preview';
+  const canvas = document.getElementById('generatorPreviewCanvas');
+  await renderGeneratorTile(canvas, previewText);
+  canvas.style.display = 'block';
+  document.getElementById('generator-preview-hint').style.display = 'none';
+}
+
+document.getElementById('generatorGenerateBtn').onclick = async () => {
+  const lines = document.getElementById('generatorLines').value.trim().split('\n').filter(l => l.trim());
+  if (!lines.length) return;
+  const btn = document.getElementById('generatorGenerateBtn');
+  btn.disabled = true;
+  document.getElementById('generator-modal').classList.add('hidden');
+  showImportProgress(0, lines.length, 'Generating…');
+  const offscreen = document.createElement('canvas');
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i].trim();
+    await renderGeneratorTile(offscreen, text);
+    const webp = offscreen.toDataURL('image/webp', 0.85);
+    const ref = makeItem(text);
+    await saveImage(ref.id, webp);
+    imageCache.set(ref.id, webp);
+    pool.push(ref);
+    showImportProgress(i + 1, lines.length, 'Generating…');
+  }
+  hideImportProgress();
+  btn.disabled = false;
+  saveState();
+  render();
+};
+
+// ── INSPECT OVERLAY ───────────────────────────────────────────────────────────
+const inspectOverlay = document.getElementById('inspect-overlay');
+const inspectImg = document.getElementById('inspect-img');
+const inspectName = document.getElementById('inspect-name');
+
+function findRef(id) {
+  for (const tier of tiers) {
+    for (const ref of tier.items) {
+      if (ref.type === 'item' && ref.id === id) return ref;
+      if (ref.type === 'group') { const f = ref.items.find(i => i.id === id); if (f) return f; }
+    }
+  }
+  return pool.find(r => r.id === id) || null;
+}
+
+async function showInspect(itemId) {
+  const src = await getCachedImage(itemId);
+  if (!src) return;
+  const ref = findRef(itemId);
+  inspectImg.src = src;
+  inspectName.textContent = ref?.name || '';
+  inspectOverlay.classList.remove('hidden');
+}
+
+inspectOverlay.addEventListener('pointerdown', () => {
+  inspectOverlay.classList.add('hidden');
+  inspectImg.src = '';
+});
+
+// ── KEYBOARD SHORTCUTS ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+
+  // Escape — close inspect or deselect
+  if (e.key === 'Escape') {
+    if (!inspectOverlay.classList.contains('hidden')) {
+      inspectOverlay.classList.add('hidden');
+      inspectImg.src = '';
+      return;
+    }
+    selectedIds.clear();
+    document.querySelectorAll('.item.selected').forEach(el => el.classList.remove('selected'));
+    return;
+  }
+
+  // Delete / Backspace — trash selected
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size) {
+    e.preventDefault();
+    const toDelete = [...selectedIds];
+    showConfirm(`Delete ${toDelete.length} item(s)?`).then(async confirmed => {
+      if (!confirmed) return;
+      for (const id of toDelete) {
+        await deleteImage(id);
+        removeFromContainer(id);
+        selectedIds.delete(id);
+      }
+      saveState(); render();
+    });
+    return;
+  }
+
+  // Number keys 1-9 — send selected items to that tier
+  const num = parseInt(e.key);
+  if (!isNaN(num) && num >= 1 && num <= 9 && selectedIds.size) {
+    const tier = tiers[num - 1];
+    if (!tier) return;
+    e.preventDefault();
+    const ids = [...selectedIds];
+    // Capture refs before removal
+    const refsToMove = ids.map(id => findRef(id)).filter(Boolean);
+    ids.forEach(id => removeFromContainer(id));
+    tier.items.push(...refsToMove);
+    saveState();
+    // Rerender affected tiers — find which tiers lost items
+    const affectedTierIds = new Set([tier.id]);
+    // We don't easily know source tiers here, just do a full render
+    render();
+    return;
+  }
+
+  // Arrow keys — navigate selection
+  if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+    e.preventDefault();
+    const allItems = [...document.querySelectorAll('.item:not(.search-dim)')];
+    if (!allItems.length) return;
+    const lastEl = lastSelectedId
+      ? document.querySelector(`.item[data-item-id="${lastSelectedId}"]`)
+      : null;
+    let idx = lastEl ? allItems.indexOf(lastEl) : -1;
+
+    if (e.key === 'ArrowRight') {
+      idx = Math.min(idx + 1, allItems.length - 1);
+    } else if (e.key === 'ArrowLeft') {
+      idx = Math.max(idx - 1, 0);
+    } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && lastEl) {
+      // Find item in the row above/below by matching closest x position
+      const curRect = lastEl.getBoundingClientRect();
+      const curCenterX = curRect.left + curRect.width / 2;
+      const curCenterY = curRect.top + curRect.height / 2;
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
+      // Find items that are clearly on a different row (Y differs by more than half item height)
+      const rowThreshold = curRect.height * 0.5;
+      const candidates = allItems
+        .map((el, i) => {
+          const r = el.getBoundingClientRect();
+          const cy = r.top + r.height / 2;
+          const cx = r.left + r.width / 2;
+          const yDiff = cy - curCenterY;
+          return { i, el, cx, cy, yDiff };
+        })
+        .filter(c => dir === 1 ? c.yDiff > rowThreshold : c.yDiff < -rowThreshold);
+      if (candidates.length) {
+        // Among candidates, find the row closest in Y, then pick closest X in that row
+        const minYDist = Math.min(...candidates.map(c => Math.abs(c.yDiff)));
+        const rowCandidates = candidates.filter(c => Math.abs(Math.abs(c.yDiff) - minYDist) < rowThreshold);
+        const best = rowCandidates.reduce((a, b) =>
+          Math.abs(a.cx - curCenterX) < Math.abs(b.cx - curCenterX) ? a : b);
+        idx = best.i;
+      }
+      // If no candidates (already on last/first row), stay put
+    } else if (idx < 0) {
+      idx = 0;
+    }
+
+    if (idx < 0) idx = 0;
+    const target = allItems[idx];
+    if (!target) return;
+    const targetId = target.dataset.itemId;
+    if (!e.shiftKey) {
+      selectedIds.clear();
+      selectedIds.add(targetId);
+    } else {
+      selectedIds.add(targetId);
+    }
+    lastSelectedId = targetId;
+    document.querySelectorAll('.item').forEach(el =>
+      el.classList.toggle('selected', selectedIds.has(el.dataset.itemId)));
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+});
 
 // ── DRAG-DROP FILES ───────────────────────────────────────────────────────────
 let dragFileCounter = 0;

@@ -219,27 +219,15 @@ html, body {
   overflow: hidden;
   flex-shrink: 0;
   user-select: none;
-}
-
-body.fit-mode .item {
-  height: auto;
-  min-height: 40px;
-  max-height: 160px;
+  background: var(--bg3);
 }
 
 .item img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   pointer-events: none;
-}
-
-body.fit-mode .item img {
-  object-fit: contain;
-  height: auto;
-  max-height: 160px;
-  background: #000;
 }
 
 .item:active { cursor: grabbing; }
@@ -452,15 +440,6 @@ body.pool-unpinned #app-body {
   gap: 10px;
 }
 
-.fit-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.78rem;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.fit-toggle input { cursor: pointer; accent-color: var(--accent); }
 
 #image-pool {
   display: flex;
@@ -671,3 +650,267 @@ body.pool-unpinned #app-body {
 
 /* ── UNDO/REDO ── */
 #undoBtn:disabled, #redoBtn:disabled { opacity: 0.35; cursor: default; }
+
+/* ── SORT ACTIVE ── */
+#sortPoolBtn.sort-active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+/* ── INSPECT OVERLAY ── */
+#inspect-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  padding: 24px;
+  box-sizing: border-box;
+}
+#inspect-overlay.hidden { display: none; }
+#inspect-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+}
+#inspect-img {
+  flex: 1;
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(100% - 40px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  image-rendering: auto;
+}
+#inspect-name {
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  font-size: 0.9rem;
+  text-align: center;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+/* ── EXPORT MODAL ── */
+.export-modal-content {
+  max-width: 900px;
+  width: 90vw;
+}
+.export-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.export-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+.export-setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.export-setting span:first-child {
+  min-width: 110px;
+  color: var(--text-dim);
+}
+.export-setting input[type="number"],
+.export-setting select {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  padding: 4px 6px;
+  width: 70px;
+  outline: none;
+}
+.export-setting select { width: auto; }
+.setting-hint { color: var(--text-dim); font-size: 0.75rem; }
+.export-preview-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 200px;
+  padding: 10px;
+  overflow: auto;
+  max-height: 60vh;
+}
+#exportCanvas {
+  max-width: 100%;
+  border-radius: 2px;
+  display: none;
+}
+#export-preview-hint {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+/* ── EXPORT RENDERING ── */
+#export-render-container {
+  position: fixed;
+  left: -99999px;
+  top: 0;
+  background: var(--bg);
+  overflow: visible;
+}
+#export-render-container .grab-handle,
+#export-render-container .tier-actions,
+#export-render-container #add-tier-row {
+  display: none !important;
+}
+#export-render-container.show-labels .item::after {
+  content: attr(data-name);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 10px;
+  font-family: 'DM Sans', sans-serif;
+  text-align: center;
+  padding: 2px 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* ── EXPORT LABELS ── */
+#tiers.export-show-labels .item::after {
+  content: attr(data-name);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-size: 10px;
+  font-family: 'DM Sans', sans-serif;
+  text-align: center;
+  padding: 2px 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* ── IMPORT PROGRESS ── */
+#import-progress {
+  position: fixed;
+  top: var(--header-h);
+  left: 0; right: 0;
+  height: 28px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  z-index: 300;
+  display: none;
+  overflow: hidden;
+}
+#import-progress-bar {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  background: var(--accent);
+  opacity: 0.25;
+  transition: width 0.1s;
+}
+#import-progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-family: 'Space Mono', monospace;
+  color: var(--text);
+}
+
+/* ── GENERATOR MODAL ── */
+.generator-modal-content {
+  max-width: 700px;
+  width: 90vw;
+}
+.generator-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.generator-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+  flex-shrink: 0;
+}
+.generator-settings textarea {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  padding: 8px;
+  resize: vertical;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.generator-settings textarea:focus { border-color: var(--accent); }
+.generator-preview-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 220px;
+  padding: 16px;
+}
+#generator-preview-hint {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: center;
+}
+#generatorPreviewCanvas {
+  max-width: 200px;
+  image-rendering: auto;
+}
+
+/* ── GENERATOR COLOR PICKERS ── */
+.gen-color-anchor {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.gen-slider-val {
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}

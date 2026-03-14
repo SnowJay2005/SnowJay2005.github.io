@@ -19,6 +19,7 @@
     <button id="undoBtn" class="hdr-btn" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
     <button id="redoBtn" class="hdr-btn" title="Redo (Ctrl+Y)" disabled>↪ Redo</button>
     <button id="imageAdder" class="hdr-btn" title="Add Images">+ Images</button>
+    <button id="generatorBtn" class="hdr-btn" title="Generate images from text">+ Text</button>
     <button id="exportImageBtn" class="hdr-btn" title="Export as PNG">Export PNG</button>
     <button id="export-btn" class="hdr-btn" title="Export JSON">Export JSON</button>
     <button id="import-btn" class="hdr-btn" title="Import JSON">Import JSON</button>
@@ -38,11 +39,7 @@
     <span id="pool-title">Image Pool</span>
     <div id="pool-header-right">
       <input type="search" id="searchInput" placeholder="Search…" autocomplete="off" />
-      <label class="fit-toggle">
-        <input type="checkbox" id="fitToggle" />
-        <span>Fit mode</span>
-      </label>
-      <button id="sortPoolBtn" class="hdr-btn small" title="Sort pool A-Z">A-Z (Off)</button>
+      <button id="sortPoolBtn" class="hdr-btn small" title="Sort pool A-Z">A-Z</button>
       <button id="trash-button" class="hdr-btn small" title="Drag items here to delete">🗑</button>
       <button id="pinToggleBtn" class="hdr-btn small">📌 Pin</button>
     </div>
@@ -52,17 +49,54 @@
 
 <!-- Export modal -->
 <div id="export-modal" class="modal hidden">
-  <div class="modal-content">
+  <div class="modal-content export-modal-content">
     <div class="modal-header">
       <h2>Export Tierlist</h2>
       <button class="modal-close">✕</button>
     </div>
-    <img id="exportPreviewImage" alt="Export preview" />
-    <div class="modal-options">
-      <label>Scale: <input type="number" id="exportScale" min="1" max="4" step="1" value="2" /></label>
-      <label><input type="checkbox" id="exportTransparent" /> Transparent background</label>
+    <div class="export-layout">
+      <div class="export-settings">
+        <label class="export-setting">
+          <span>Format</span>
+          <select id="exportFormat">
+            <option value="image/webp" selected>WebP</option>
+            <option value="image/png">PNG</option>
+          </select>
+        </label>
+        <label class="export-setting">
+          <span>Scale</span>
+          <select id="exportScale">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="3">3×</option>
+            <option value="4">4×</option>
+          </select>
+        </label>
+        <label class="export-setting">
+          <span>Items per row</span>
+          <input type="number" id="exportItemsPerRow" min="1" max="200" value="20" />
+        </label>
+        <label class="export-setting">
+          <span>Show labels</span>
+          <input type="checkbox" id="exportShowLabels" />
+        </label>
+        <div class="export-setting">
+          <span>Auto-fit</span>
+          <div style="display:flex;gap:4px;">
+            <button id="export-autofit-square" class="hdr-btn small">1:1</button>
+            <button id="export-autofit-169" class="hdr-btn small">16:9</button>
+            <button id="export-autofit-wide" class="hdr-btn small">Wide</button>
+          </div>
+        </div>
+        <button id="export-preview-btn" class="hdr-btn">Preview</button>
+        <button id="download-png" class="big-btn">Download</button>
+      </div>
+      <div class="export-preview-wrap">
+        <img id="exportPreviewImg" style="display:none;max-width:100%;border-radius:2px;" alt="preview" />
+        <div id="export-preview-hint">Press Preview to generate</div>
+      </div>
     </div>
-    <button id="download-png" class="big-btn">Download PNG</button>
   </div>
 </div>
 
@@ -92,6 +126,7 @@
 
 <!-- Context menu -->
 <div id="context-menu" class="hidden">
+  <div class="ctx-option" data-action="inspect">🔍 Inspect</div>
   <div class="ctx-option" data-action="rename">✏️ Rename</div>
   <div class="ctx-option" data-action="group">📁 Group selected</div>
   <div class="ctx-option" data-action="ungroup">📂 Ungroup</div>
@@ -99,14 +134,75 @@
   <div class="ctx-option danger" data-action="delete">🗑 Delete</div>
 </div>
 
-<!-- Drop overlay -->
-<div id="drop-overlay">Drop images to add</div>
+<!-- Inspect overlay -->
+<div id="inspect-overlay" class="hidden">
+  <div id="inspect-inner">
+    <img id="inspect-img" alt="" />
+    <div id="inspect-name"></div>
+  </div>
+</div>
+
+<!-- Generator modal -->
+<div id="generator-modal" class="modal hidden">
+  <div class="modal-content generator-modal-content">
+    <div class="modal-header">
+      <h2>Generate Images</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="generator-layout">
+      <div class="generator-settings">
+        <label class="export-setting">
+          <span>Lines</span>
+        </label>
+        <textarea id="generatorLines" placeholder="One item per line..." rows="10"></textarea>
+
+        <div class="export-setting" style="margin-top:8px;">
+          <span>Background</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <div id="genBgColorPickr" class="gen-color-anchor"></div>
+            <button id="genBgImageBtn" class="hdr-btn small">Image</button>
+            <span id="genBgImageName" style="font-size:0.75rem;color:var(--text-dim);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          </div>
+        </div>
+
+        <label class="export-setting" id="genDimRow" style="display:none;">
+          <span>Dim image</span>
+          <input type="range" id="genDimAmount" min="0" max="100" value="40" style="flex:1;" />
+          <span class="gen-slider-val" id="genDimVal">40%</span>
+        </label>
+
+        <div class="export-setting">
+          <span>Text color</span>
+          <div id="genTextColorPickr" class="gen-color-anchor"></div>
+        </div>
+
+        <div class="export-setting">
+          <span>Stroke color</span>
+          <div id="genStrokeColorPickr" class="gen-color-anchor"></div>
+        </div>
+
+        <label class="export-setting">
+          <span>Stroke width</span>
+          <input type="range" id="genStrokeWidth" min="0" max="12" value="0" style="flex:1;" />
+          <span class="gen-slider-val" id="genStrokeVal">0px</span>
+        </label>
+
+        <button id="generatorGenerateBtn" class="big-btn">Generate All</button>
+      </div>
+      <div class="generator-preview-wrap">
+        <canvas id="generatorPreviewCanvas" width="200" height="200" style="display:none;border-radius:4px;"></canvas>
+        <div id="generator-preview-hint">Adjust settings then press Preview</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="genBgImageLoader" style="display:none" accept="image/*" />
 
 <input type="file" id="imageLoader" style="display:none" multiple accept="image/*" />
 <input type="file" id="import-json" style="display:none" accept="application/json" />
 
 <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
